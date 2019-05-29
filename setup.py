@@ -17,11 +17,19 @@ import os
 import setuptools
 
 
-name = 'bqpipeline'
+name = 'ox_bqpipeline'
 description = 'Utility class for building data pipelines in BigQuery'
 version = '0.1.0'
 release_status = 'Development Status :: 3 - Alpha'
 dependencies = [
+    'google-cloud>=0.34.0',
+    'google-api-python-client>=1.7.8',
+    'google-cloud-bigquery>=1.9.0',
+    'Jinja2>=2.10',
+    'j2cli>=0.3.8',
+    'sqlparse>=0.3.0',
+    'pylint>=1.9.4',
+    'futures==3.2.0',
     'google-cloud-bigquery >= 1.9.0',
     'Jinja2 >= 2.10'
 ]
@@ -29,7 +37,7 @@ extras = {}
 
 
 # Setup boilerplate below this line.
-package_root = os.path.abspath(os.path.dirname(__file__))
+package_root = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'ox_bqpipeline')
 
 readme_filename = os.path.join(package_root, 'README.md')
 with io.open(readme_filename, encoding='utf-8') as readme_file:

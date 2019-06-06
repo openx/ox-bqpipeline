@@ -14,20 +14,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import argparse
 import codecs
+import functools
+import getpass
 import os
-from google.cloud import bigquery
-from jinja2.sandbox import SandboxedEnvironment
 import logging
 import logging.handlers
 import sys
 
+from google.cloud import bigquery
+from jinja2.sandbox import SandboxedEnvironment
 
 
-def get_logger(name, logging_path='/home/ubuntu/', fmt='%(asctime)-15s %(levelname)s %(message)s'):
+def get_logger(name, logging_path='/home/cronuser/', fmt='%(asctime)-15s %(levelname)s %(message)s',):
     """
     Creates a Logger that logs to stdout
+
     :param name: name of the logger
+    :param logging_ath: path to capture log files. For local development set this to a directory
+        you own. When submitting a PR to schedule this set this to '/home/cronuser/'
     :param fmt: format string for log messages
     :return: Logger
     """
@@ -42,7 +48,7 @@ def get_logger(name, logging_path='/home/ubuntu/', fmt='%(asctime)-15s %(levelna
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter(fmt))
 
-    log = logging.getLogger(name)
+    log = logging.getLogger(__name__)
     log.setLevel(logging.DEBUG)
     log.addHandler(print_handler)
     log.addHandler(file_handler)
@@ -94,7 +100,26 @@ def create_copy_job_config(overwrite=True):
     return bigquery.job.CopyJobConfig(
         write_disposition=bigquery.job.WriteDisposition.WRITE_EMPTY)
 
-class BQPipeline(object):
+def exception_logger(func):
+    """
+    A decorator that wraps the passed in function and logs 
+    exceptions should one occur
+    """
+    logger = logging.getLogger(__name__)
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except:
+            # log the exception
+            err = "There was an exception in {}: ".format(func.__name__)
+            err += func.__name__
+            logger.exception(err)
+            raise
+    return wrapper
+
+class BQPipeline():
     """
     BigQuery Python SDK Client Wrapper
     Provides methods for running queries, copying and deleting tables.
@@ -130,6 +155,7 @@ class BQPipeline(object):
         self.bq = None
         self.jinja2 = SandboxedEnvironment()
 
+
     def get_client(self):
         """
         Initializes bigquery.Client
@@ -140,7 +166,7 @@ class BQPipeline(object):
                 self.bq = bigquery.Client.from_service_account_json(self.json_credentials_path)
             else:
                 self.bq = bigquery.Client(project=self.query_project, location=self.location)
-            
+
             self.query_project = self.bq.project
             if self.default_project is None:
                 self.default_project = self.bq.project
@@ -159,6 +185,8 @@ class BQPipeline(object):
         :param dest: TableSpec string or partial TableSpec string
         :return str TableSpec
         """
+        if type(dest) == bigquery.table.TableReference:
+            return dest
         table_id = dest
         if table_id is not None:
             parts = table_id.split('.')
@@ -170,12 +198,37 @@ class BQPipeline(object):
                 table_id = self.default_project + '.' + self.default_dataset + '.' + dest
         return table_id
 
-    def create_job_config(self, batch=True, dest=None, create=True,
+    def resolve_dataset_spec(self, dataset):
+        """
+        Resolves a full DatasetSpec from a partial DatasetSpec by adding default
+        project.
+        :param dest: DatasetSpec string or partial DatasetSpec string
+        :return str DatasetSpec
+        """
+        dataset_id = dataset
+        if dataset_id is not None:
+            parts = dataset_id.split('.')
+            if len(parts) == 1 and \
+                self.default_project is not None:
+                dataset_id = self.default_project + '.' + dataset
+        return dataset_id
+
+    @exception_logger
+    def create_dataset(self, dataset, exists_ok=False):
+        """
+        Creates a BigQuery Dataset from a full or partial dataset spec.
+        :param dataset: DatasetSpec string or partial DatasetSpec string
+        """
+        return self.bq.create_dataset(self.resolve_dataset_spec(dataset),
+                                      exists_ok=exists_ok)
+
+    def create_job_config(self, batch=False, dest=None, create=True,
                           overwrite=True, append=False):
         """
         Creates a QueryJobConfig
         :param batch: use QueryPriority.BATCH if true
-        :param dest: tablespec of destination table
+        :param dest: tablespec of destination table, or a GCS wildcard to
+            write query results to.
         :param create: if False, destination table must already exist
         :param overwrite: if False, destination table must not exist
         :param append: if True, destination table will be appended to
@@ -199,27 +252,31 @@ class BQPipeline(object):
             priority = bigquery.QueryPriority.INTERACTIVE
 
         if dest is not None:
+            # If the destination is a GCS path, don't set a destinaion table.
+            if dest.startswith('gs://'):
+                dest_tableref = None
             dest_tableref = to_tableref(self.resolve_table_spec(dest))
         else:
             dest_tableref = None
 
         if self.default_project is not None \
             and self.default_dataset is not None:
-            ds = bigquery.dataset.DatasetReference(
+            data_set = bigquery.dataset.DatasetReference(
                 project=self.default_project,
                 dataset_id=self.default_dataset
             )
         else:
-            ds = None
+            data_set = None
 
         return bigquery.QueryJobConfig(priority=priority,
-                                       default_dataset=ds,
+                                       default_dataset=data_set,
                                        destination=dest_tableref,
                                        create_disposition=create_disp,
                                        write_disposition=write_disp)
 
-    def run_query(self, path, batch=True, wait=True, create=True,
-                  overwrite=True, timeout=None, **kwargs):
+    @exception_logger
+    def run_query(self, path, batch=False, wait=True, create=True,
+                  overwrite=True, timeout=None, gcs_export_format='CSV', **kwargs):
         """
         Executes a SQL query from a Jinja2 template file
         :param path: path to sql file or tuple of (path to sql file, destination tablespec)
@@ -228,14 +285,17 @@ class BQPipeline(object):
         :param create: if False, destination table must already exist
         :param overwrite: if False, destination table must not exist
         :param timeout: time in seconds to wait for job to complete
+        :param gcs_export_format: CSV, AVRO, or JSON.
         :param kwargs: replacements for Jinja2 template
         :return: bigquery.job.QueryJob
         """
         dest = None
         sql_path = path
         if type(path) == tuple:
+            is_gcs_dest = path[1].startswith('gs://')
             sql_path = path[0]
-            dest = self.resolve_table_spec(path[1])
+            if not is_gcs_dest:
+                dest = self.resolve_table_spec(path[1])
 
         template_str = read_sql(sql_path)
         template = self.jinja2.from_string(template_str)
@@ -249,6 +309,15 @@ class BQPipeline(object):
             job.result(timeout=timeout)  # wait for job to complete
             job = client.get_job(job.job_id)
             self.logger.info('Finished query %s %s', sql_path, job.job_id)
+
+        if is_gcs_dest:
+            if gcs_export_format == 'CSV':
+                self.export_csv_to_gcs(job.destination, path[1], delimiter=',', header=True)
+            elif gcs_export_format == 'JSON':
+                self.export_json_to_gcs(job.destination, path[1])
+            elif gcs_export_format == 'AVRO':
+                self.export_avro_to_gcs(job.destination, path[1])
+
         return job
 
     def run_queries(self, query_paths, batch=True, wait=True, create=True,
@@ -265,8 +334,9 @@ class BQPipeline(object):
         """
         for path in query_paths:
             self.run_query(path, batch=batch, wait=wait, create=create,
-                           overwrite=overwrite, timeout=timeout, **kwargs)
+overwrite=overwrite, timeout=timeout, **kwargs)
 
+    @exception_logger
     def copy_table(self, src, dest, wait=True, overwrite=True, timeout=None):
         """
         :param src: tablespec 'project.dataset.table'
@@ -289,6 +359,7 @@ class BQPipeline(object):
             job = self.get_client().get_job(job.job_id)
         return job
 
+    @exception_logger
     def delete_table(self, table):
         """
         Deletes a table
@@ -306,8 +377,9 @@ class BQPipeline(object):
         for table in tables:
             self.delete_table(table)
 
+    @exception_logger
     def export_csv_to_gcs(self, table, gcs_path, delimiter=',', header=True,
-            wait=True):
+                          wait=True, timeout=None):
         """
         Export a table to GCS as CSV.
         :param table: str of table spec `project.dataset.table`
@@ -327,11 +399,13 @@ class BQPipeline(object):
         self.logger.info('Extracting table `%s` to `%s` as CSV  %s', table, gcs_path, job.job_id)
         if wait:
             job.result(timeout=timeout)  # wait for job to complete
-            job = client.get_job(job.job_id)
-            self.logger.info('Finished Extract table `%s` to `%s` as CSV  %s', table, gcs_path, job.job_id)
+            job = self.get_client().get_job(job.job_id)
+            self.logger.info('Finished Extract table `%s` to `%s` as CSV  %s',
+                             table, gcs_path, job.job_id)
         return job
 
-    def export_json_to_gcs(self, table, gcs_path):
+    @exception_logger
+    def export_json_to_gcs(self, table, gcs_path, wait=True, timeout=None):
         """
         Export a table to GCS as a Newline Delimited JSON file.
         :param table: str of table spec `project.dataset.table`
@@ -347,11 +421,14 @@ class BQPipeline(object):
         self.logger.info('Extracting table `%s` to `%s` as JSON  %s', table, gcs_path, job.job_id)
         if wait:
             job.result(timeout=timeout)  # wait for job to complete
-            job = client.get_job(job.job_id)
-            self.logger.info('Finished Extract table `%s` to `%s` as JSON  %s', table, gcs_path, job.job_id)
+            job = self.get_client().get_job(job.job_id)
+            self.logger.info('Finished Extract table `%s` to `%s` as JSON  %s',
+                             table, gcs_path, job.job_id)
         return job
 
-    def export_avro_to_gcs(self, table, gcs_path, compression='snappy'):
+    @exception_logger
+    def export_avro_to_gcs(self, table, gcs_path, compression='snappy',
+                           wait=True, timeout=None):
         """
         Export a table to GCS as a Newline Delimited JSON file.
         :param table: str of table spec `project.dataset.table`
@@ -364,9 +441,38 @@ class BQPipeline(object):
         )
 
         job = self.get_client().extract_table(src, gcs_path, job_config=extract_job_config)
-        self.logger.info('Extracting table `%s` to `%s` as JSON  %s', table, gcs_path, job.job_id)
+        self.logger.info('Extracting table `%s` to `%s` as AVRO  %s', table, gcs_path, job.job_id)
         if wait:
             job.result(timeout=timeout)  # wait for job to complete
-            job = client.get_job(job.job_id)
-            self.logger.info('Finished Extract table `%s` to `%s` as JSON  %s', table, gcs_path, job.job_id)
+            job = self.get_client().get_job(job.job_id)
+            self.logger.info('Finished Extract table `%s` to `%s` as AVRO  %s',
+                             table, gcs_path, job.job_id)
         return job
+def main():
+    """
+    Handles CLI invocations of bqpipelines.
+    """
+    print_handler = logging.StreamHandler(sys.stdout)
+    print_handler.setLevel(logging.DEBUG)
+    fmt = '%(asctime)-15s %(levelname)s %(message)s'
+    print_handler.setFormatter(logging.Formatter(fmt))
+
+    job_name = getpass.getuser() + '-cli-job'
+    log = logging.getLogger(job_name)
+    log.setLevel(logging.DEBUG)
+    log.addHandler(print_handler)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--query_file', dest='query_file', required=True,
+                        help="Path to your bigquery sql file.")
+    parser.add_argument('--gcs_destination', dest='gcs_destination', required=False,
+                        help="GCS wildcard path to write files.", default=None)
+    parser.add_argument('--gcs_export_format', dest='gcs_format', required=False,
+                        help="GCS wildcard path to write files.", default='CSV')
+    args = parser.parse_args()
+
+    bqp = BQPipeline(job_name)
+    bqp.run_query((args.query_file, args.gcs_destination), gcs_format=args.gcs_format)
+
+if __name__ == "__main__":
+    main()

@@ -39,7 +39,7 @@ extras = {}
 # Setup boilerplate below this line.
 package_root = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'ox_bqpipeline')
 
-readme_filename = os.path.join(package_root, 'README.md')
+readme_filename = 'README.md'
 with io.open(readme_filename, encoding='utf-8') as readme_file:
     readme = readme_file.read()
 
@@ -64,7 +64,7 @@ setuptools.setup(
         'Topic :: Internet',
     ],
     platforms='Posix; MacOS X; Windows',
-    packages=['bqpipeline'],
+    packages=['ox_bqpipeline'],
     install_requires=dependencies,
     extras_require=extras,
     python_requires='>=3.4',

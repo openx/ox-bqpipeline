@@ -165,6 +165,7 @@ class BQPipeline():
             credentials file
         """
         self.logger = logging.getLogger(__name__)
+        self.job_name = job_name
         self.job_id_prefix = job_name + '-'
         self.location = location
         self.query_project = None # inferred from service account.
@@ -415,6 +416,9 @@ overwrite=overwrite, timeout=timeout, **kwargs)
             print_header=header
         )
 
+        gcs_path = os.path.join(gcs_path, self.job_name, datetime.datetime.now().strftime("jobRunTime=%Y%m%d%h%m%s"),
+                                self.job_name + "-export-*.csv")
+
         job = self.get_client().extract_table(src, gcs_path, job_config=extract_job_config)
         self.logger.info('Extracting table `%s` to `%s` as CSV  %s', table, gcs_path, job.job_id)
         return job
@@ -432,6 +436,9 @@ overwrite=overwrite, timeout=timeout, **kwargs)
             compression='NONE',
             destination_format='NEWLINE_DELIMITED_JSON',
         )
+
+        gcs_path = os.path.join(gcs_path, self.job_name, datetime.datetime.now().strftime("jobRunTime=%Y%m%d%h%m%s"),
+                                self.job_name + "-export-*.json")
 
         job = self.get_client().extract_table(src, gcs_path, job_config=extract_job_config)
         self.logger.info('Extracting table `%s` to `%s` as JSON  %s', table, gcs_path, job.job_id)
@@ -451,6 +458,9 @@ overwrite=overwrite, timeout=timeout, **kwargs)
             compression=compression,
             destination_format='AVRO'
         )
+
+        gcs_path = os.path.join(gcs_path, self.job_name, datetime.datetime.now().strftime("jobRunTime=%Y%m%d%h%m%s"),
+                                self.job_name + "-export-*.avro")
 
         job = self.get_client().extract_table(src, gcs_path, job_config=extract_job_config)
         self.logger.info('Extracting table `%s` to `%s` as AVRO  %s', table, gcs_path, job.job_id)

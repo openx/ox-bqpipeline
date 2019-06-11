@@ -24,19 +24,20 @@ import logging.handlers
 import sys
 
 from google.cloud import bigquery
+from google.cloud.logging import Client as LoggingClient
+from google.cloud.logging.handlers import  CloudLoggingHandler 
 from jinja2.sandbox import SandboxedEnvironment
 
 
-def get_logger(name, logging_path='/home/cronuser/', fmt='%(asctime)-15s %(levelname)s %(message)s',):
+def get_logger(name, fmt='%(asctime)-15s %(levelname)s %(message)s'):
     """
     Creates a Logger that logs to stdout
 
     :param name: name of the logger
-    :param logging_ath: path to capture log files. For local development set this to a directory
-        you own. When submitting a PR to schedule this set this to '/home/cronuser/'
     :param fmt: format string for log messages
     :return: Logger
     """
+    logging_path = os.path.expanduser('~')
     print_handler = logging.StreamHandler(sys.stdout)
     print_handler.setLevel(logging.DEBUG)
     print_handler.setFormatter(logging.Formatter(fmt))
@@ -45,12 +46,17 @@ def get_logger(name, logging_path='/home/cronuser/', fmt='%(asctime)-15s %(level
         when='D',
         interval=30
     )
+
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter(fmt))
 
+    logging_client = LoggingClient()
+    cloud_handler = CloudLoggingHandler(logging_client, name='bq-analyst-cron')
+
     log = logging.getLogger(__name__)
-    log.setLevel(logging.DEBUG)
+    log.setLevel(logging.INFO)
     log.addHandler(print_handler)
+    log.addHandler(cloud_handler)
     log.addHandler(file_handler)
     return log
 
@@ -119,6 +125,19 @@ def exception_logger(func):
             raise
     return wrapper
 
+def gcs_export_job_poller(func):
+    """
+    A decorator to wait on export job
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+       job = func(*args, **kwargs)
+       job.result(timeout=kwargs.get('timeout'))  # wait for job to complete
+       job = self.get_client().get_job(job.job_id)
+       self.logger.info('Finished Extract table `%s` to `%s`. jobId: %s',
+                        table, gcs_path, job.job_id)
+    return wrapper
+
 class BQPipeline():
     """
     BigQuery Python SDK Client Wrapper
@@ -145,7 +164,7 @@ class BQPipeline():
         :param json_credentials_path: (optional) path to service account JSON
             credentials file
         """
-        self.logger = logging.getLogger(job_name)
+        self.logger = logging.getLogger(__name__)
         self.job_id_prefix = job_name + '-'
         self.location = location
         self.query_project = None # inferred from service account.
@@ -378,6 +397,7 @@ overwrite=overwrite, timeout=timeout, **kwargs)
             self.delete_table(table)
 
     @exception_logger
+    @gcs_export_job_poller
     def export_csv_to_gcs(self, table, gcs_path, delimiter=',', header=True,
                           wait=True, timeout=None):
         """
@@ -397,14 +417,10 @@ overwrite=overwrite, timeout=timeout, **kwargs)
 
         job = self.get_client().extract_table(src, gcs_path, job_config=extract_job_config)
         self.logger.info('Extracting table `%s` to `%s` as CSV  %s', table, gcs_path, job.job_id)
-        if wait:
-            job.result(timeout=timeout)  # wait for job to complete
-            job = self.get_client().get_job(job.job_id)
-            self.logger.info('Finished Extract table `%s` to `%s` as CSV  %s',
-                             table, gcs_path, job.job_id)
         return job
 
     @exception_logger
+    @gcs_export_job_poller
     def export_json_to_gcs(self, table, gcs_path, wait=True, timeout=None):
         """
         Export a table to GCS as a Newline Delimited JSON file.
@@ -419,14 +435,10 @@ overwrite=overwrite, timeout=timeout, **kwargs)
 
         job = self.get_client().extract_table(src, gcs_path, job_config=extract_job_config)
         self.logger.info('Extracting table `%s` to `%s` as JSON  %s', table, gcs_path, job.job_id)
-        if wait:
-            job.result(timeout=timeout)  # wait for job to complete
-            job = self.get_client().get_job(job.job_id)
-            self.logger.info('Finished Extract table `%s` to `%s` as JSON  %s',
-                             table, gcs_path, job.job_id)
         return job
 
     @exception_logger
+    @gcs_export_job_poller
     def export_avro_to_gcs(self, table, gcs_path, compression='snappy',
                            wait=True, timeout=None):
         """
@@ -442,11 +454,6 @@ overwrite=overwrite, timeout=timeout, **kwargs)
 
         job = self.get_client().extract_table(src, gcs_path, job_config=extract_job_config)
         self.logger.info('Extracting table `%s` to `%s` as AVRO  %s', table, gcs_path, job.job_id)
-        if wait:
-            job.result(timeout=timeout)  # wait for job to complete
-            job = self.get_client().get_job(job.job_id)
-            self.logger.info('Finished Extract table `%s` to `%s` as AVRO  %s',
-                             table, gcs_path, job.job_id)
         return job
 def main():
     """

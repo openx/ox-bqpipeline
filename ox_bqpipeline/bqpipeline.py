@@ -132,11 +132,11 @@ def gcs_export_job_poller(func):
     """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
+       logger = logging.getLogger(__name__)
        job = func(*args, **kwargs)
        job.result(timeout=kwargs.get('timeout'))  # wait for job to complete
-       job = self.get_client().get_job(job.job_id)
-       self.logger.info('Finished Extract table `%s` to `%s`. jobId: %s',
-                        table, gcs_path, job.job_id)
+       logger.info('Finished Extract to GCS. jobId: %s',
+                        job.job_id)
     return wrapper
 
 class BQPipeline():
@@ -417,7 +417,7 @@ overwrite=overwrite, timeout=timeout, **kwargs)
             print_header=header
         )
 
-        gcs_path = os.path.join(gcs_path, self.job_name, datetime.datetime.now().strftime("jobRunTime=%Y%m%d%h%m%s"),
+        gcs_path = os.path.join(gcs_path, self.job_name, datetime.datetime.now().strftime("jobRunTime=%Y-%m-%dT%H%M%S"),
                                 self.job_name + "-export-*.csv")
 
         job = self.get_client().extract_table(src, gcs_path, job_config=extract_job_config)
@@ -486,7 +486,7 @@ def main():
     parser.add_argument('--gcs_destination', dest='gcs_destination', required=False,
                         help="GCS wildcard path to write files.", default=None)
     parser.add_argument('--gcs_export_format', dest='gcs_format', required=False,
-                        help="GCS wildcard path to write files.", default='CSV')
+                        help="Format for export. CSV | AVRO | JSON", default='CSV')
     args = parser.parse_args()
 
     bqp = BQPipeline(job_name)

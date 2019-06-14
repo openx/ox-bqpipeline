@@ -56,8 +56,8 @@ setuptools.setup(
     author_email=author_email,
     url=url,
     download_url=download_url,
-    release_status=release_status,
     long_description=readme,
+    long_description_content_type='text/markdown',
     license='Apache 2.0',
     classifiers=[
         release_status,

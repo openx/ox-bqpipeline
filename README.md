@@ -6,6 +6,8 @@ Provides methods for query, copy table, delete table and export to GCS.
 
 Supports Jinja2 templated SQL.
 
+# Getting Started 
+[Check out the codelab!](https://codinginadtech.com/ox-bqpipeline/codelab/index.html#0)
 
 ## Usage
 

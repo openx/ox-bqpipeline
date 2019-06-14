@@ -6,4 +6,3 @@ Jinja2>=2.10
 j2cli>=0.3.8
 sqlparse>=0.3.0
 pylint>=1.9.4
-futures==3.2.0; python_version == "3"

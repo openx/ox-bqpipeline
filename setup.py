@@ -19,11 +19,11 @@ import setuptools
 
 name = 'ox_bqpipeline'
 description = 'Utility class for building data pipelines in BigQuery'
-version = '0.0.1'
+version = '0.0.2'
 author = 'Jacob Ferriero'
 author_email = 'jferriero@google.com'
 url = 'https://github.com/openx/ox-bqpipeline'
-download_url = 'https://github.com/openx/ox-bqpipeline/archive/v_0.0.1.tar.gz'
+download_url = 'https://github.com/openx/ox-bqpipeline/archive/v_0.0.2.tar.gz'
 release_status = 'Development Status :: 3 - Alpha'
 dependencies = [
     'google-cloud>=0.34.0',
@@ -33,7 +33,6 @@ dependencies = [
     'j2cli>=0.3.8',
     'sqlparse>=0.3.0',
     'pylint>=1.9.4',
-    'futures==3.2.0',
     'google-cloud-bigquery >= 1.9.0',
     'Jinja2 >= 2.10'
 ]

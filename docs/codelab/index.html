@@ -25,7 +25,7 @@
                   id="openx-bq-scheduling"
                   title="Analytics Codelab: Scheduling Queries with your Team Git Repo"
                   environment="web"
-                  feedback-link="https://github.com/googlecodelabs/your-first-pwapp/issues">
+                  feedback-link="">
     
       <google-codelab-step label="Introduction" duration="0">
         <p><strong>Last Updated:</strong> 2019-05-02</p>
@@ -116,7 +116,7 @@ remote:      https://github.com/openx/analytics-team-repo/pull/new/feature/myNew
 <p>Each team shares a repo to scheduled pipelines, and the repo comprises of the following elements:</p>
 <ul>
 <li><code>sql/</code> directory to define SQL Queries. This can optionally use jinja templating in the queries.</li>
-<li><code>python/</code> directory to define Python wrappers. This should take advantage of the BQPipeline utility class in this repo. (<a href="https://github.com/openx/analytics-team-repo/blob/master/python/bqpipeline/README.md" target="_blank">docs</a>)</li>
+<li><code>python/</code> directory to define Python wrappers. This should take advantage of the BQPipeline utility class (<a href="https://github.com/openx/ox-bqpipeline" target="_blank">docs</a>).</li>
 <li>Python wrappers should reference sql file(s). If the file uses jinja templating the wrapper should provide the replacements.</li>
 <li>A <code>crontab</code> file in the root of the repo to define your cron entry. This should reference your Python wrapper script.</li>
 </ul>

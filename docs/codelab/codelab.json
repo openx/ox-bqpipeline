@@ -3,7 +3,7 @@
   "format": "html",
   "prefix": "https://storage.googleapis.com",
   "mainga": "UA-49880327-14",
-  "updated": "2019-06-13T22:06:00Z",
+  "updated": "2019-06-19T00:53:16Z",
   "id": "openx-bq-scheduling",
   "duration": 90,
   "title": "Analytics Codelab: Scheduling Queries with your Team Git Repo",
@@ -21,7 +21,6 @@
     "command line interface",
     "gke"
   ],
-  "feedback": "https://github.com/googlecodelabs/your-first-pwapp/issues",
   "ga": "UA-52746336-1",
   "url": "openx-bq-scheduling"
 }

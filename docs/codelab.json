@@ -3,13 +3,13 @@
   "format": "html",
   "prefix": "https://storage.googleapis.com",
   "mainga": "UA-49880327-14",
-  "updated": "2019-06-19T00:53:16Z",
+  "updated": "2019-06-27T20:52:35Z",
   "id": "openx-bq-scheduling",
   "duration": 90,
   "title": "Analytics Codelab: Scheduling Queries with your Team Git Repo",
-  "authors": "Jacob Ferriero , Subramanya Gunturu, Brandon O'Connor",
+  "authors": "Jacob Ferriero, Subramanya Gunturu, Brandon O'Connor",
   "summary": "In this codelab, you'll use a python wrapper to define a BigQuery pipeline and schedule it to run on a GKE cluster by checking it into a git repo",
-  "source": "1OOciYhVo9TPcc-amBgzkLxHfQSUK-mnf3x8sCIntyTE",
+  "source": "https://docs.google.com/document/d/1OOciYhVo9TPcc-amBgzkLxHfQSUK-mnf3x8sCIntyTE",
   "theme": "big-data-analytics",
   "status": [
     "draft"

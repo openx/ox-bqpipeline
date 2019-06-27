@@ -56,10 +56,12 @@
     
       <google-codelab-step label="Cloud Shell Development Environment" duration="15">
         <p>Click the below button to get started</p>
-<p><a href="https://console.cloud.google.com/cloudshell/editor?cloudshell_git_repo=https://github.com/openx/bq-analysts-team-bq-scheduled-jobs.git" target="_blank"><paper-button class="colored" raised>Cloud Shell</paper-button></a></p>
+<p><a href="https://console.cloud.google.com/cloudshell/editor" target="_blank"><paper-button class="colored" raised>Cloud Shell</paper-button></a></p>
+<h2 is-upgraded><strong>Checkout the code</strong></h2>
+<pre><code>git clone git@github.com:openx/bq-analysts-team-bq-scheduled-jobs.git</code></pre>
 <h2 is-upgraded><strong>First time only setup</strong></h2>
 <p>The quickest way to setup github authentication is to enter your Github username. Follow the instructions in <a href="https://medium.com/@ginnyfahs/github-error-authentication-failed-from-command-line-3a545bfd0ca8" target="_blank">this post</a> to create a personal access token and paste this as your password. You can name this personal access token <code>could-shell</code>.</p>
-<p>Alternatively, to avoid having to do that every time you can configure passwordless login with an ssh key. </p>
+<p>Alternatively, to avoid having to do that every time you can configure passwordless login with an ssh key.</p>
 <ul>
 <li>Follow these <a href="https://help.github.com/en/articles/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent" target="_blank">instructions for creating a SSH key</a>. </li>
 <li>Follow these <a href="https://help.github.com/en/articles/adding-a-new-ssh-key-to-your-github-account" target="_blank">instructions for adding an SSH key to your Github Account</a>. Note that <code>xclip</code> will not work for copying your public key. Instead just <code>cat</code>, highlight, copy and paste it into the browser.</li>
@@ -72,19 +74,30 @@ chmod -r ~/.ssh/id_rsa.pub</code></pre>
 <pre><code>git config --global user.email &#34;first.last@openx.com&#34;
 git config --global user.name &#34;First Last&#34;</code></pre>
 <p>Create a <a href="https://docs.python.org/3/library/venv.html" target="_blank">virtual environment</a> using the steps below. This will keep your python dependency management simpler.</p>
-<pre><code>cd python
-sudo apt-get install python3-venv -y &amp;&amp; \
+<pre><code>cd python &amp;&amp; sudo apt-get install python3-venv -y &amp;&amp; \
 python3 -m venv bq-pipeline-venv</code></pre>
 <p>Activate your virtual environment.</p>
-<pre><code>source bq-pipeline-venv/bin/activate</code></pre>
+<pre><code>source python/bq-pipeline-venv/bin/activate</code></pre>
 <p>Install dependencies defined in <code>requirements.txt</code>. We&#39;ve included several tools make your development workflow better. </p>
 <p>If further python dependencies are needed this file will need to be updated.</p>
-<pre><code>python3 -m pip install -r requirements.txt</code></pre>
+<pre><code>python3 -m pip install -r python/requirements.txt</code></pre>
 <p>Note: You can safely ignore the warnings on &#34;bdlist_wheel&#34;</p>
 <h2 is-upgraded><strong>Each Next Login</strong></h2>
 <p>You&#39;re good to go! Next time you log into the cloud shell, you can simply activate your virtual environment and install again to ensure your installed packages are up to date </p>
 <pre><code>source bq-pipeline-venv/bin/activate
 python3 -m pip install -r requirements.txt</code></pre>
+<h2 is-upgraded><strong>Add A Bash Profile (Optional)</strong></h2>
+<pre><code>vi ~/.bash_profile</code></pre>
+<p>Copy/paste the following content to the above .bash_profile file.</p>
+<pre><code># Git branch in prompt.
+parse_git_branch() {
+  git branch 2&gt; /dev/null | sed -e &#39;/^[^*]/d&#39; -e &#39;s/* \(.*\)/ (\1)/&#39;
+}
+export PS1=&#34;\u@\h \W\[\033[32m\]\$(parse_git_branch)\[\033[00m\] $ &#34;
+
+alias init_bq_venv=&#34;source ~/bq-analysts-team-bq-scheduled-jobs/python/bq-pipeline-venv/bin/activate&#34;</code></pre>
+<p>Now you can activate your virtual environment by simply running the following:</p>
+<pre><code>init_bq_venv</code></pre>
 
 
       </google-codelab-step>
@@ -138,11 +151,11 @@ remote:      https://github.com/openx/analytics-team-repo/pull/new/feature/myNew
 <li>Note the <code>&#123;&#123; project }}</code> and <code>&#123;&#123; dataset }}</code> in the second query are <a href="https://realpython.com/primer-on-jinja-templating/" target="_blank">Jinja</a> templates. These values will be replaced by your python wrapper.</li>
 </ul>
 <p>Ensure you are in the <code>analytics-team-repo</code> directory (the repository root). Create a files <code>./sql/race_splits.sql</code> and <code>./sql/finish_times.sql:</code></p>
-<pre>touch ./sql/race_splits.sql ; cloudshell edit ./sql/race_splits.sql
-touch ./sql/finish_times.sql ; cloudshell edit ./sql/finish_times.sql</pre>
+<pre><code>touch ./sql/race_splits.sql ; cloudshell edit ./sql/race_splits.sql
+touch ./sql/finish_times.sql ; cloudshell edit ./sql/finish_times.sql</code></pre>
 <p>Copy the contents of <code>./sql/race_splits.sql</code> to be:</p>
-<pre># ./sql/race_splits.sql
-SELECT &#34;800M&#34; AS race,
+<h3 is-upgraded>./sql/race_splits.sql</h3>
+<pre><code>SELECT &#34;800M&#34; AS race,
    [STRUCT(&#34;Rudisha&#34; as name, [23.4, 26.3, 26.4, 26.1] as splits),
     STRUCT(&#34;Makhloufi&#34; as name, [24.5, 25.4, 26.6, 26.1] as splits),
     STRUCT(&#34;Murphy&#34; as name, [23.9, 26.0, 27.0, 26.0] as splits),
@@ -153,18 +166,16 @@ SELECT &#34;800M&#34; AS race,
     STRUCT(&#34;Berian&#34; as name, [23.7, 26.1, 27.0, 29.3] as splits),
     STRUCT(&#34;Nathan&#34; as name, ARRAY&lt;FLOAT64&gt;[] as splits),
     STRUCT(&#34;David&#34; as name, NULL as splits)]
-    AS participants</pre>
+    AS participants</code></pre>
 <p>Copy the contents of <code>./sql/finish_times.sql</code> to be:</p>
-<pre># ./sql/finish_times.sql
-SELECT
-  name, sum(duration) AS finish_time
-FROM \`&#123;&#123; project }}.&#123;&#123; dataset }}\`.races, races.participants LEFT JOIN participants.splits duration
-GROUP BY name;</pre>
+<h3 is-upgraded>./sql/finish_times.sql</h3>
+<pre><code>SELECT name, sum(duration) AS finish_time
+FROM `&#123;&#123; project }}.&#123;&#123; dataset }}`.races, races.participants LEFT JOIN participants.splits duration
+GROUP BY name;</code></pre>
 <h2 is-upgraded>Define a Python Wrapper</h2>
 <p>Start by making a copy of the <code>example.py</code> and opening it in your editor<code>:</code></p>
-<pre><code>cd python
-cp example_pipeline.py my_first_pipeline.py
-cloudshell edit my_first_pipeline.py</code></pre>
+<pre><code>cp python/example_pipeline.py python/my_first_pipeline.py
+cloudshell edit python/my_first_pipeline.py</code></pre>
 <p> Now we&#39;ll walk through line by line and edit  <code>my_first_pipeline.py</code> in the Cloud Shell Code Editor:</p>
 <ul>
 <li>Edit the docstring in line 4 to describe your pipeline.</li>
@@ -175,26 +186,26 @@ cloudshell edit my_first_pipeline.py</code></pre>
     DATASET = &#34;scratch&#34;
 ...</code></pre>
 <ul>
-<li>Notice the <code>BQP</code> object is of class <code>BQPipeline</code>. This provides us convenience methods for interacting with BigQuery.</li>
-<li>Search for variable assignments to <code>TBL1, TBL2,</code> etc. We&#39;re only working with two tables for this scheduled job, so delete all but <code>TBL1 and TBL2</code>. Both should be set to <code>= races</code></li>
-<li>In <code>BQP.run_queries</code> we pass a list of (query, destination table) pairs </li>
+<li>Notice the <code>bqp</code> object is of class <code>BQPipeline</code>. This provides us convenience methods for interacting with BigQuery.</li>
+<li>Search for variable assignments to <code>races, avg_speed_csv,</code> etc. We&#39;re only working with two tables for this scheduled job, so delete all but <code>races and avg_speed_csv</code>. Both should be set to <code>= races</code></li>
+<li>In <code>bqp.run_queries</code> we pass a list of (query, destination table) pairs </li>
 <li>Edit the first entry to invoke <code>race_splits.sql</code> into destination table <code>races</code></li>
 <li>Edit the second entry to invoke <code>finish_times.sql</code> into GCS destination: <code>&#39;gs://analytics-scratch/csv_export/finish_times/&#39;</code></li>
 <li>Note , the framework will create a `runtime=YYYY-MM-DDTHH:MM:SS/` directory and dump the export files here named as `&lt;job-name&gt;-*.csv` where the * handles splitting files if the export is &gt; 1GB.</li>
 <li>Note that tables can be passed as </li>
-<li><code>table_id</code> (project and dataset inferred from BQP)</li>
-<li><code>dataset_id.table_id</code> (project inferred from BQP)</li>
+<li><code>table_id</code> (project and dataset inferred from bqp)</li>
+<li><code>dataset_id.table_id</code> (project inferred from bqp)</li>
 <li><code>Project_id.dataset_id.table_id</code> (fully qualified path)</li>
-<li>Edit the <code>BQP.delete_tables</code> expression to delete the <code>races</code> table.</li>
+<li>Edit the <code>bqp.delete_tables</code> expression to delete the <code>races</code> table.</li>
 </ul>
 <h2 is-upgraded><strong>Edit the crontab file</strong></h2>
 <p>In the cloud shell editor, edit the <code>crontab</code> file at the root of this directory to get your pipeline scheduled. Each  entry consist of:</p>
 <ul>
 <li>A Cron Schedule string. Adhere to <a href="https://en.wikipedia.org/wiki/Cron#Overview" target="_blank">cron schedule syntax</a> and Use <a href="https://crontab.guru/" target="_blank">cron guru</a> to check your schedule string</li>
 <li>Invoke python3</li>
-<li>Fully qualified path to your pipeline script. (Note: these should all start with <code>/home/ubuntu/cronjob_repo/python/)</code></li>
+<li>Fully qualified path to your pipeline script. (Note: these should all start with <code>/home/cronuser/cronjob_repo/python/)</code></li>
 </ul>
-<pre>*/30 * * * * python3 /home/ubuntu/cronjob_repo/python/example_pipeline.py</pre>
+<pre><code>*/30 * * * * python3 /home/cronuser/cronjob_repo/python/example_pipeline.py</code></pre>
 
 
       </google-codelab-step>
@@ -204,47 +215,47 @@ cloudshell edit my_first_pipeline.py</code></pre>
 <p>Format your query using <code>sqlformat.</code> This tool can automate making your sql queries look pretty and consistent, similar to the bigquery format button in the UI. If you&#39;ve never used this tool within cloudshell, install it using:</p>
 <pre><code>sudo apt-get install sqlformat -y</code></pre>
 <p>Invoke <code>sqlformat</code> from the <code>sql/</code> directory:</p>
-<pre>sqlformat \
+<pre><code>sqlformat \
   --reindent \
   --keywords upper \
   --identifiers lower \
-  race_splits.sql -o race_splits.sql
+  race_splits.sql -o sql/race_splits.sql
 
 sqlformat \
   --reindent \
   --keywords upper \
   --identifiers lower \
-  finish_times.sql -o finish_times.sql</pre>
+  finish_times.sql -o sql/finish_times.sql</code></pre>
 <h2 is-upgraded><strong>Validate your query</strong></h2>
 <ul>
 <li>Passing the <code>--dry_run</code> flag will quickly validate syntax and check that the tables you have referenced exist</li>
 <li>If you&#39;d actually like to run the query just omit the <code>--dry_run</code> flag</li>
 </ul>
-<pre>cat race_splits.sql | bq query --use_legacy_sql=false --dry_run
+<pre><code>bq query --use_legacy_sql=false --dry_run --flagfile sql/race_splits.sql
 
-cat finish_times.sql | bq query --use_legacy_sql=false --dry_run </pre>
+bq query --use_legacy_sql=false --dry_run --flagfile sql/finish_times.sql</code></pre>
 <ul>
 <li>Note, this second dry run will fail for a few reasons </li>
 <li>There are Jinja templates aren&#39;t rendered</li>
 <li>The races table doesn&#39;t exist because this table should be created by the first query which never actually ran</li>
 </ul>
 <p>Successfully validating this query</p>
-<pre># Create this table in the scratch dataset. (Not necessary for existing tables)
+<pre><code># Create this table in the scratch dataset. (Not necessary for existing tables)
 bq query --use_legacy_sql=false \
---destination_table=ox-data-analytics-prod.scratch.races \
-race_splits.sql 
+--destination_table=ox-data-analytics-prod:scratch.races \
+--flagfile sql/race_splits.sql
 
 # Set environment variables for templated values.
 export project=ox-data-analytics-prod
 export dataset=scratch
 
 # Use j2 to render the template and dry run it.
-j2 finish_times.sql | bq query --use_legacy_sql=false --dry_run</pre>
+j2 sql/finish_times.sql | bq query --use_legacy_sql=false --dry_run</code></pre>
 <p>Check your Python style. Note the cloud shell code editor will give you hints on python style as you develop! <code>pylint</code> is just a CLI tool to use as a final check.</p>
 <h3 is-upgraded>Strongly Recommended: Strive to achieve 10/10 score ! </h3>
-<pre><code>python3 -m pylint my_first_pipeline.py</code></pre>
+<pre><code>python3 -m pylint python/my_first_pipeline.py</code></pre>
 <h3 is-upgraded>Validate your python wrapper by running the below command locally and observe the expected logs and outputs in GCP console. Note, this is not a dry run, each query in you pipeline will actually get executed in BigQuery and destination tables created as needed.</h3>
-<h3 is-upgraded><code>python3 my_first_pipeline.py</code></h3>
+<pre><code>python3 my_first_pipeline.py</code></pre>
 <p><strong>Submitting a git Pull Request</strong></p>
 <p>Use below git commands to commit and push your code (checkout this <a href="https://try.github.io/" target="_blank">reference for learning git!</a>):</p>
 <pre><code>git add sql/ python/ crontab
@@ -269,7 +280,7 @@ git push --set-upstream origin feature/myNewScheduledQuery</code></pre>
 <p>You can look at the logs with this command. Using the <code>--freshness</code> flag to control how far back in the logs you want to look.</p>
 <pre><code>gcloud logging read \
 --freshness 3h \
-&#39;logName=&#34;projects/ox-data-analytics-devint/logs/bq-analyst-cron&#34;&#39;</code></pre>
+logName:&#34;projects/ox-data-analytics-devint/logs/bq-analysts-bq-scheduled-jobs&#34;&#39;</code></pre>
 
 
       </google-codelab-step>

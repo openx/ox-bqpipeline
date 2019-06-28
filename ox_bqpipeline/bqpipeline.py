@@ -30,7 +30,8 @@ from google.cloud.logging.handlers import  CloudLoggingHandler
 from jinja2.sandbox import SandboxedEnvironment
 
 
-def get_logger(name, fmt='%(asctime)-15s %(levelname)s %(message)s'):
+def get_logger(name, fmt='%(asctime)-15s %(levelname)s %(message)s',
+               log_name='bq-analyst-cron'):
     """
     Creates a Logger that logs to stdout
 
@@ -52,7 +53,7 @@ def get_logger(name, fmt='%(asctime)-15s %(levelname)s %(message)s'):
     file_handler.setFormatter(logging.Formatter(fmt))
 
     logging_client = LoggingClient()
-    cloud_handler = CloudLoggingHandler(logging_client, name='bq-analyst-cron')
+    cloud_handler = CloudLoggingHandler(logging_client, name=log_name)
 
     log = logging.getLogger(__name__)
     log.setLevel(logging.INFO)

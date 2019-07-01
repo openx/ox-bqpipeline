@@ -81,7 +81,19 @@ pipenv install --python 3
 ### Install with pipenv
 
 ```bash
-pipenv run python -m unittest discover
+python3 -m pip install -r requirements.txt
+```
+
+or
+
+```bash
+pip3 install -r requirements.txt
+```
+
+### Run test suite
+
+```bash
+python3 -m unittest discover
 ```
 
 ### Run test suite using pipenv
@@ -89,6 +101,7 @@ pipenv run python -m unittest discover
 ```bash
 pipenv run python -m unittest discover
 ```
+
 
 ## Requirements
 

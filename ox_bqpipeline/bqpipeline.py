@@ -37,6 +37,7 @@ def get_logger(name, fmt='%(asctime)-15s %(levelname)s %(message)s',
 
     :param name: name of the logger
     :param fmt: format string for log messages
+    :param log_name: name for the cloud logger
     :return: Logger
     """
     logging_path = os.path.expanduser('~')

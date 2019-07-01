@@ -22,22 +22,21 @@ import getpass
 import os
 import logging
 import logging.handlers
+import socket
 import sys
 
 from google.cloud import bigquery
 from google.cloud.logging import Client as LoggingClient
-from google.cloud.logging.handlers import  CloudLoggingHandler 
+from google.cloud.logging.handlers import CloudLoggingHandler
 from jinja2.sandbox import SandboxedEnvironment
 
 
-def get_logger(name, fmt='%(asctime)-15s %(levelname)s %(message)s',
-               log_name='bq-analyst-cron'):
+def get_logger(name, fmt='%(asctime)-15s %(levelname)s %(message)s'):
     """
     Creates a Logger that logs to stdout
 
     :param name: name of the logger
     :param fmt: format string for log messages
-    :param log_name: name for the cloud logger
     :return: Logger
     """
     logging_path = os.path.expanduser('~')
@@ -54,7 +53,8 @@ def get_logger(name, fmt='%(asctime)-15s %(levelname)s %(message)s',
     file_handler.setFormatter(logging.Formatter(fmt))
 
     logging_client = LoggingClient()
-    cloud_handler = CloudLoggingHandler(logging_client, name=log_name)
+    cloud_log_suffix = '{}-{}'.format(socket.gethostname(), name)
+    cloud_handler = CloudLoggingHandler(logging_client, name=cloud_log_suffix)
 
     log = logging.getLogger(__name__)
     log.setLevel(logging.INFO)
@@ -111,7 +111,7 @@ def create_copy_job_config(overwrite=True):
 
 def exception_logger(func):
     """
-    A decorator that wraps the passed in function and logs 
+    A decorator that wraps the passed in function and logs
     exceptions should one occur
     """
     logger = logging.getLogger(__name__)

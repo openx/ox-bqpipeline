@@ -13,34 +13,43 @@
 # limitations under the License.
 
 import unittest
-from ox_bqpipeline.bqpipeline import BQPipeline
+from ox_bqpipeline.bqpipeline import BQPipeline, get_logger
 from google.cloud import bigquery
+import socket
 
 
 class TestQueryParameters(unittest.TestCase):
     def test_table_spec_resolution(self):
-        bq = BQPipeline(job_name='testjob', default_project='testproject', default_dataset='testdataset')
+        bq = BQPipeline(
+            job_name='testjob', default_project='testproject', default_dataset='testdataset')
         # resolve from table only
-        self.assertEqual(bq.resolve_table_spec('testtable'), 'testproject.testdataset.testtable')
+        self.assertEqual(bq.resolve_table_spec('testtable'),
+                         'testproject.testdataset.testtable')
         # resolve from dataset.table
-        self.assertEqual(bq.resolve_table_spec('testdataset.testtable'), 'testproject.testdataset.testtable')
+        self.assertEqual(bq.resolve_table_spec(
+            'testdataset.testtable'), 'testproject.testdataset.testtable')
         # leave project.dataset.table unchanged
-        self.assertEqual(bq.resolve_table_spec('testproject.testdataset.testtable'), 'testproject.testdataset.testtable')
+        self.assertEqual(bq.resolve_table_spec(
+            'testproject.testdataset.testtable'), 'testproject.testdataset.testtable')
 
     def test_create_job_config_default(self):
-        bq = BQPipeline(job_name='testjob', default_project='testproject', default_dataset='testdataset')
+        bq = BQPipeline(
+            job_name='testjob', default_project='testproject', default_dataset='testdataset')
 
         cfg = bq.create_job_config()
         self.assertIsNone(cfg.destination)
         self.assertIsNotNone(cfg.default_dataset)
         self.assertEqual(cfg.default_dataset.project, 'testproject')
         self.assertEqual(cfg.default_dataset.dataset_id, 'testdataset')
-        self.assertEqual(cfg.create_disposition, bigquery.job.CreateDisposition.CREATE_IF_NEEDED)
-        self.assertEqual(cfg.write_disposition, bigquery.job.WriteDisposition.WRITE_TRUNCATE)
-        self.assertEqual(cfg.priority, bigquery.QueryPriority.BATCH)
+        self.assertEqual(cfg.create_disposition,
+                         bigquery.job.CreateDisposition.CREATE_IF_NEEDED)
+        self.assertEqual(cfg.write_disposition,
+                         bigquery.job.WriteDisposition.WRITE_TRUNCATE)
+        self.assertEqual(cfg.priority, bigquery.QueryPriority.INTERACTIVE)
 
     def test_create_job_config_destination(self):
-        bq = BQPipeline(job_name='testjob', default_project='testproject', default_dataset='testdataset')
+        bq = BQPipeline(
+            job_name='testjob', default_project='testproject', default_dataset='testdataset')
 
         cfgs = [
             bq.create_job_config(dest='testtable'),
@@ -54,8 +63,24 @@ class TestQueryParameters(unittest.TestCase):
             self.assertEqual(cfg.destination.project, 'testproject')
 
     def test_create_job_config_flags(self):
-        bq = BQPipeline(job_name='testjob', default_project='testproject', default_dataset='testdataset')
+        bq = BQPipeline(
+            job_name='testjob', default_project='testproject', default_dataset='testdataset')
         cfg = bq.create_job_config(batch=False, create=False, overwrite=False)
         self.assertEqual(cfg.priority, bigquery.QueryPriority.INTERACTIVE)
-        self.assertEqual(cfg.create_disposition, bigquery.job.CreateDisposition.CREATE_NEVER)
-        self.assertEqual(cfg.write_disposition, bigquery.job.WriteDisposition.WRITE_EMPTY)
+        self.assertEqual(cfg.create_disposition,
+                         bigquery.job.CreateDisposition.CREATE_NEVER)
+        self.assertEqual(cfg.write_disposition,
+                         bigquery.job.WriteDisposition.WRITE_EMPTY)
+
+
+class TestLogging(unittest.TestCase):
+    def test_name_in_log_suffix(self):
+        log_suffix = "test-logs-ftw"
+        logger = get_logger(log_suffix)
+        cloud_logger = [ h for h in logger.handlers if type(h._name) == str and h._name.endswith(log_suffix) ]
+        self.assertEqual(len(cloud_logger), 1)
+
+    def test_hostname_in_log_suffix(self):
+        logger = get_logger("logs")
+        cloud_logger = [ h for h in logger.handlers if type(h._name) == str and socket.gethostname() in h._name ]
+        self.assertEqual(len(cloud_logger), 1)

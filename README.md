@@ -6,7 +6,7 @@ Provides methods for query, copy table, delete table and export to GCS.
 
 Supports Jinja2 templated SQL.
 
-# Getting Started 
+# Getting Started
 [Check out the codelab!](https://codinginadtech.com/ox-bqpipeline/codelab/index.html#0)
 
 ## Usage
@@ -14,7 +14,7 @@ Supports Jinja2 templated SQL.
 Create an instance of BQPipeline. By setting `query_project`, `default_project` and `default_dataset`, you can omit project and dataset from table references in your SQL statements.
 
 `default_project` is the project used when a tablespec does not specify a project.
- 
+
 `default_dataset` is the dataset used when a tablespec does not specify project or dataset.
 
 Place files containing a single BigQuery Standard SQL statement per file.
@@ -24,7 +24,7 @@ Note that if you reference a project with a '-' in the name, you must backtick t
 ### Writing scripts to be easily portable between environments
 - Use `{{ project }}` in all your sql queries
 - In your replacements dictionary, set `'project'` to the value of `BQPipeline.infer_project()`
-this will infer the project from the credentials. This means in your local shell it will use 
+this will infer the project from the credentials. This means in your local shell it will use
 `GOOGLE_APPLICATION_DEFAULT` and on the cron box it will use project of the CronBox's Service Account.
 
 ```
@@ -74,10 +74,21 @@ source venv/bin/activate
 
 ### Install with pip
 
-```
-python3 -m pip install -r requirements.txt
+```bash
+pipenv install --python 3
 ```
 
+### Install with pipenv
+
+```bash
+pipenv run python -m unittest discover
+```
+
+### Run test suite using pipenv
+
+```bash
+pipenv run python -m unittest discover
+```
 
 ## Requirements
 

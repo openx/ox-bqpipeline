@@ -297,9 +297,13 @@ class BQPipeline():
                                        create_disposition=create_disp,
                                        write_disposition=write_disp)
 
+    def set_query_params(self, query_params):
+        pass
+
     @exception_logger
     def run_query(self, path, batch=False, wait=True, create=True,
-                  overwrite=True, timeout=None, gcs_export_format='CSV', **kwargs):
+                  overwrite=True, timeout=None, gcs_export_format='CSV',
+                  query_params=None, **kwargs):
         """
         Executes a SQL query from a Jinja2 template file
         :param path: path to sql file or tuple of (path to sql file, destination tablespec)
@@ -324,8 +328,11 @@ class BQPipeline():
         template = self.jinja2.from_string(template_str)
         query = template.render(**kwargs)
         client = self.get_client()
+        job_config = self.create_job_config(batch, dest, create, overwrite)
+        job_config.query_parameters = self.set_query_params(query_params)
+
         job = client.query(query,
-                           job_config=self.create_job_config(batch, dest, create, overwrite),
+                           job_config=job_config,
                            job_id_prefix=self.job_id_prefix)
         self.logger.info('Executing query %s %s', sql_path, job.job_id)
         if wait:

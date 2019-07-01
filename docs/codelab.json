@@ -9,7 +9,7 @@
   "title": "Analytics Codelab: Scheduling Queries with your Team Git Repo",
   "authors": "Jacob Ferriero, Subramanya Gunturu, Brandon O'Connor",
   "summary": "In this codelab, you'll use a python wrapper to define a BigQuery pipeline and schedule it to run on a GKE cluster by checking it into a git repo",
-  "source": "https://docs.google.com/document/d/1OOciYhVo9TPcc-amBgzkLxHfQSUK-mnf3x8sCIntyTE",
+  "source": "1OOciYhVo9TPcc-amBgzkLxHfQSUK-mnf3x8sCIntyTE",
   "theme": "big-data-analytics",
   "status": [
     "draft"

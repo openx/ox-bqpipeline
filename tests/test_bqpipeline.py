@@ -14,8 +14,8 @@
 
 import datetime
 import mock
-import unittest
 import socket
+import unittest
 
 from google.cloud import bigquery
 
@@ -173,7 +173,6 @@ class TestQueryParameters(unittest.TestCase):
         cfg = bq.create_job_config(batch=False, create=False, overwrite=False)
         self.assertTrue(bq.validate_query_params({'1': {}}))
         self.assertTrue(bq.validate_query_params({'1': {1: 1}}))
-
 
 class TestLogging(unittest.TestCase):
     def test_name_in_log_suffix(self):

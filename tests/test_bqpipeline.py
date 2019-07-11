@@ -12,15 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import datetime
+import mock
 import unittest
-from ox_bqpipeline.bqpipeline import BQPipeline, get_logger
-from google.cloud import bigquery
 import socket
+
+from google.cloud import bigquery
+
+from ox_bqpipeline import bqpipeline
+
+
+def mock_gcs_export():
+    pass
 
 
 class TestQueryParameters(unittest.TestCase):
+    def setUp(self):
+        pass
+
     def test_table_spec_resolution(self):
-        bq = BQPipeline(
+        bq = bqpipeline.BQPipeline(
             job_name='testjob', default_project='testproject', default_dataset='testdataset')
         # resolve from table only
         self.assertEqual(bq.resolve_table_spec('testtable'),
@@ -33,7 +44,7 @@ class TestQueryParameters(unittest.TestCase):
             'testproject.testdataset.testtable'), 'testproject.testdataset.testtable')
 
     def test_create_job_config_default(self):
-        bq = BQPipeline(
+        bq = bqpipeline.BQPipeline(
             job_name='testjob', default_project='testproject', default_dataset='testdataset')
 
         cfg = bq.create_job_config()
@@ -48,7 +59,7 @@ class TestQueryParameters(unittest.TestCase):
         self.assertEqual(cfg.priority, bigquery.QueryPriority.INTERACTIVE)
 
     def test_create_job_config_destination(self):
-        bq = BQPipeline(
+        bq = bqpipeline.BQPipeline(
             job_name='testjob', default_project='testproject', default_dataset='testdataset')
 
         cfgs = [
@@ -63,8 +74,9 @@ class TestQueryParameters(unittest.TestCase):
             self.assertEqual(cfg.destination.project, 'testproject')
 
     def test_create_job_config_flags(self):
-        bq = BQPipeline(
-            job_name='testjob', default_project='testproject', default_dataset='testdataset')
+        bq = bqpipeline.BQPipeline(
+            job_name='testjob', default_project='testproject',
+            default_dataset='testdataset')
         cfg = bq.create_job_config(batch=False, create=False, overwrite=False)
         self.assertEqual(cfg.priority, bigquery.QueryPriority.INTERACTIVE)
         self.assertEqual(cfg.create_disposition,
@@ -72,15 +84,107 @@ class TestQueryParameters(unittest.TestCase):
         self.assertEqual(cfg.write_disposition,
                          bigquery.job.WriteDisposition.WRITE_EMPTY)
 
+    def test_scalar_parameters(self):
+        result = bqpipeline.set_scalar_parameter('test', 'abc', typ='str')
+        self.assertEqual(result, bigquery.ScalarQueryParameter('test',
+                                                               'STRING', 'abc'))
+
+        result = bqpipeline.set_scalar_parameter('test', 1, typ='int')
+        self.assertEqual(result, bigquery.ScalarQueryParameter('test',
+                                                               'INT64', 1))
+
+        dt = datetime.datetime.now()
+        result = bqpipeline.set_scalar_parameter('test', dt, typ='datetime')
+        self.assertEqual(result, bigquery.ScalarQueryParameter('test',
+                                                               'TIMESTAMP', dt))
+
+        b = bytes(123)
+        result = bqpipeline.set_scalar_parameter('test', b, typ='bytes')
+        self.assertEqual(result, bigquery.ScalarQueryParameter('test',
+                                                               'BYTES', b))
+
+        with self.assertRaises(KeyError):
+            bqpipeline.set_scalar_parameter('test', 1, typ='unsupported')
+
+    def test_array_parameters(self):
+        result = bqpipeline.set_list_parameter('test', ['abc'], typ='list')
+        self.assertEqual(result, bigquery.ArrayQueryParameter('test', 'STRING',
+                                                              ['abc']))
+
+        result = bqpipeline.set_list_parameter('test', [1, 2], typ='list')
+        self.assertEqual(result, bigquery.ArrayQueryParameter('test', 'INT64',
+                                                              [1, 2]))
+
+        with self.assertRaises(IndexError):
+            bqpipeline.set_list_parameter('test', [], typ='list')
+
+    def test_struct_parameters(self):
+        result = bqpipeline.set_dict_parameter('test', {'a': 'abc'},
+                                               typ='list')
+        self.assertEqual(result, bigquery.StructQueryParameter(
+            'test',
+            bigquery.ScalarQueryParameter('a', 'STRING', 'abc')))
+
+    def test_positional_parameters(self):
+        result = bqpipeline.set_scalar_parameter(None, 'abc', typ='str')
+        self.assertEqual(result, bigquery.ScalarQueryParameter(None,
+                                                               'STRING', 'abc'))
+
+        result = bqpipeline.set_scalar_parameter(None, 1, typ='int')
+        self.assertEqual(result, bigquery.ScalarQueryParameter(None,
+                                                               'INT64', 1))
+
+        result = bqpipeline.set_list_parameter(None, ['abc'], typ='list')
+        self.assertEqual(result, bigquery.ArrayQueryParameter(None, 'STRING',
+                                                              ['abc']))
+
+    def test_query_params(self):
+        bq = bqpipeline.BQPipeline(
+            job_name='testjob', default_project='testproject',
+            default_dataset='testdataset')
+        cfg = bq.create_job_config(batch=False, create=False, overwrite=False)
+        self.assertIsNone(bq.set_query_params([]))
+
+        # Test positional query parameters.
+        self.assertEqual(bq.set_query_params([1,]),
+                         [bigquery.ScalarQueryParameter(None, 'INT64', 1)])
+
+        # Test named query parameters.
+        self.assertEqual(bq.set_query_params({'test': 1}),
+                         [bigquery.ScalarQueryParameter('test', 'INT64', 1)])
+
+        # Test invalid query parameters.
+        self.assertIsNone(bq.set_query_params([1, [1, 'two']]))
+
+    def test_invalid_query_params(self):
+        bq = bqpipeline.BQPipeline(
+            job_name='testjob', default_project='testproject',
+            default_dataset='testdataset')
+        cfg = bq.create_job_config(batch=False, create=False, overwrite=False)
+        # Test empty query parameters.
+        self.assertFalse(bq.validate_query_params(None))
+
+        self.assertFalse(bq.validate_query_params({1: 1}))
+
+    def test_valid_query_params(self):
+        bq = bqpipeline.BQPipeline(
+            job_name='testjob', default_project='testproject',
+            default_dataset='testdataset')
+        cfg = bq.create_job_config(batch=False, create=False, overwrite=False)
+        self.assertTrue(bq.validate_query_params({'1': {}}))
+        self.assertTrue(bq.validate_query_params({'1': {1: 1}}))
+
 
 class TestLogging(unittest.TestCase):
     def test_name_in_log_suffix(self):
         log_suffix = "test-logs-ftw"
-        logger = get_logger(log_suffix)
-        cloud_logger = [ h for h in logger.handlers if type(h._name) == str and h._name.endswith(log_suffix) ]
+        logger = bqpipeline.get_logger(log_suffix)
+        cloud_logger = [(h for h in logger.handlers if type(h._name) == str and
+                         h._name.endswith(log_suffix + "}"))]
         self.assertEqual(len(cloud_logger), 1)
 
     def test_hostname_in_log_suffix(self):
-        logger = get_logger("logs")
-        cloud_logger = [ h for h in logger.handlers if type(h._name) == str and socket.gethostname() in h._name ]
+        logger = bqpipeline.get_logger("logs")
+        cloud_logger = [(h for h in logger.handlers if type(h._name) == str and
+                         socket.gethostname() in h._name)]
         self.assertEqual(len(cloud_logger), 1)

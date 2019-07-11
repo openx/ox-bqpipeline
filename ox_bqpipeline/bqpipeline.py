@@ -19,6 +19,7 @@ import codecs
 import datetime
 import functools
 import getpass
+import json
 import os
 import logging
 import logging.handlers
@@ -140,6 +141,66 @@ def gcs_export_job_poller(func):
        logger.info('Finished Extract to GCS. jobId: %s',
                         job.job_id)
     return wrapper
+
+def set_scalar_parameter(key, value, typ):
+    """Set a named scalar query parameter
+
+    :param key str: key for the named parameter
+    :param value (int, float, str, byte, datetime.datetime):
+        value for the named parameter
+    :param typ str: type of the scalar parameter.
+    :return: bigquery.ScalarQueryParameter
+    """
+    return bigquery.ScalarQueryParameter(key, bq_scalar_type_map[typ], value)
+
+def set_list_parameter(key, value, typ):
+    """Set a named array query parameter
+
+    :param key str: key for the named parameter
+    :param value list(int, float, str, byte, datetime.datetime):
+        value for the named parameter
+    :param typ str: type of the array parameter.
+    :return: bigquery.ArrayQueryParameter
+    """
+    typ = type(value[0]).__name__
+    return bigquery.ArrayQueryParameter(key,
+                                        bq_scalar_type_map[typ],
+                                        value)
+
+def set_dict_parameter(key, value, typ):
+    """Set a named struct query parameter
+
+    :param key str: key for the named parameter
+    :param value dict: value for the named parameter
+    :param typ str: type of the scalar parameter.
+    :return: bigquery.ScalarQueryParameter
+    """
+    res = []
+    for k in value:
+        typ = type(value[k]).__name__
+        res.append(set_parameter[typ](k, value[k], typ))
+    return bigquery.StructQueryParameter(key, *res)
+
+set_parameter = {
+    'str'        : set_scalar_parameter,
+    'int'        : set_scalar_parameter,
+    'float'      : set_scalar_parameter,
+    'bytes'      : set_scalar_parameter,
+    'datetime'   : set_scalar_parameter,
+    'list'       : set_list_parameter,
+    'dict'       : set_dict_parameter,
+}
+
+bq_scalar_type_map = {
+    'str'   : 'STRING',
+    'int'   : 'INT64',
+    'float'  : 'FLOAT64',
+    'boolean': 'BOOL',
+    'bytes'  : 'BYTES',
+    'datetime': 'TIMESTAMP',
+    'date': 'DATE',
+}
+
 
 class BQPipeline():
     """
@@ -274,10 +335,8 @@ class BQPipeline():
         else:
             priority = bigquery.QueryPriority.INTERACTIVE
 
-        if dest is not None:
+        if dest and not dest.startswith('gs://'):
             # If the destination is a GCS path, don't set a destinaion table.
-            if dest.startswith('gs://'):
-                dest_tableref = None
             dest_tableref = to_tableref(self.resolve_table_spec(dest))
         else:
             dest_tableref = None
@@ -297,8 +356,61 @@ class BQPipeline():
                                        create_disposition=create_disp,
                                        write_disposition=write_disp)
 
+    def validate_query_params(self, query_params, depth=0):
+        """Validate the named/positional query parameters."""
+        if not (isinstance(query_params, list) or
+                isinstance(query_params, dict)):
+            return False
+        for key in query_params:
+            if isinstance(query_params, list):
+                value = key
+                key = None
+            else:
+                if not (depth or isinstance(key, str)):
+                    return False
+                value = query_params[key]
+
+            # For list, make sure each element is a scalar type.
+            # For dict, check recursively for valid parameters.
+            # for others, check that they map to valid scalar types.
+            if isinstance(value, list):
+                typ = set([type(val).__name__ for val in value])
+                res = not typ or (len(typ) == 1 and
+                                  typ.pop() in bq_scalar_type_map)
+            elif isinstance(value, dict):
+                res = self.validate_query_params(value, depth=1)
+            else:
+                res = type(value).__name__ in bq_scalar_type_map
+            if not res:
+                return res
+        return True
+
     def set_query_params(self, query_params):
-        pass
+        """Set the query parameters
+
+        :param query_params dict|list: Dict is provided for named parameters,
+                                       otherwise, a list.
+        :return: concrete subtype of bigquery._AbstractQueryParameter
+        """
+        if not query_params:
+            return None
+
+        if not self.validate_query_params(query_params):
+            self.logger.warning('Invalid query parameters provided!')
+            return None
+
+        bq_query_params = []
+        # Positional parameters will be passed as a list.
+        # Named parameters will be a dict.
+        for key in query_params:
+            if isinstance(query_params, list):
+                value = key
+                key = None
+            else:
+                value = query_params[key]
+            typ = type(value).__name__
+            bq_query_params.append(set_parameter[typ](key, value, typ))
+        return bq_query_params
 
     @exception_logger
     def run_query(self, path, batch=False, wait=True, create=True,
@@ -329,7 +441,9 @@ class BQPipeline():
         query = template.render(**kwargs)
         client = self.get_client()
         job_config = self.create_job_config(batch, dest, create, overwrite)
-        job_config.query_parameters = self.set_query_params(query_params)
+        query_parameters = self.set_query_params(query_params)
+        if query_parameters:
+            job_config.query_parameters = query_parameters
 
         job = client.query(query,
                            job_config=job_config,
@@ -364,7 +478,7 @@ class BQPipeline():
         """
         for path in query_paths:
             self.run_query(path, batch=batch, wait=wait, create=create,
-overwrite=overwrite, timeout=timeout, **kwargs)
+                           overwrite=overwrite, timeout=timeout, **kwargs)
 
     @exception_logger
     def copy_table(self, src, dest, wait=True, overwrite=True, timeout=None):
@@ -378,14 +492,17 @@ overwrite=overwrite, timeout=timeout, **kwargs)
         """
         src = self.resolve_table_spec(src)
         dest = self.resolve_table_spec(dest)
-        job = self.get_client().copy_table(sources=src,
-                                           destination=dest,
-                                           job_id_prefix=self.job_id_prefix,
-                                           job_config=create_copy_job_config(overwrite=overwrite))
-        self.logger.info('Copying table `%s` to `%s` %s', src, dest, job.job_id)
+        job = self.get_client().copy_table(
+            sources=src,
+            destination=dest,
+            job_id_prefix=self.job_id_prefix,
+            job_config=create_copy_job_config(overwrite=overwrite))
+        self.logger.info('Copying table `%s` to `%s` %s', src, dest,
+                         job.job_id)
         if wait:
             job.result(timeout=timeout)  # wait for job to complete
-            self.logger.info('Finished copying table `%s` to `%s` %s', src, dest, job.job_id)
+            self.logger.info('Finished copying table `%s` to `%s` %s', src,
+                             dest, job.job_id)
             job = self.get_client().get_job(job.job_id)
         return job
 
@@ -496,10 +613,13 @@ def main():
                         help="GCS wildcard path to write files.", default=None)
     parser.add_argument('--gcs_export_format', dest='gcs_format', required=False,
                         help="Format for export. CSV | AVRO | JSON", default='CSV')
+    parser.add_argument('--query_params', dest='query_params', required=False,
+                        help="Query parameters", type=json.loads, default=None)
     args = parser.parse_args()
 
     bqp = BQPipeline(job_name)
-    bqp.run_query((args.query_file, args.gcs_destination), gcs_format=args.gcs_format)
+    bqp.run_query((args.query_file, args.gcs_destination), gcs_format=args.gcs_format,
+                  query_params=args.query_params)
 
 if __name__ == "__main__":
     main()

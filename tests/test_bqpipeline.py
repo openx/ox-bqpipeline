@@ -32,7 +32,8 @@ class TestQueryParameters(unittest.TestCase):
 
     def test_table_spec_resolution(self):
         bq = bqpipeline.BQPipeline(
-            job_name='testjob', default_project='testproject', default_dataset='testdataset')
+            job_name='testjob', default_project='testproject',
+            default_dataset='testdataset')
         # resolve from table only
         self.assertEqual(bq.resolve_table_spec('testtable'),
                          'testproject.testdataset.testtable')
@@ -45,7 +46,8 @@ class TestQueryParameters(unittest.TestCase):
 
     def test_create_job_config_default(self):
         bq = bqpipeline.BQPipeline(
-            job_name='testjob', default_project='testproject', default_dataset='testdataset')
+            job_name='testjob', default_project='testproject',
+            default_dataset='testdataset')
 
         cfg = bq.create_job_config()
         self.assertIsNone(cfg.destination)
@@ -60,7 +62,8 @@ class TestQueryParameters(unittest.TestCase):
 
     def test_create_job_config_destination(self):
         bq = bqpipeline.BQPipeline(
-            job_name='testjob', default_project='testproject', default_dataset='testdataset')
+            job_name='testjob', default_project='testproject',
+            default_dataset='testdataset')
 
         cfgs = [
             bq.create_job_config(dest='testtable'),

@@ -32,6 +32,17 @@ from google.cloud.logging.handlers import CloudLoggingHandler
 from jinja2.sandbox import SandboxedEnvironment
 
 
+BQ_SCALAR_TYPE_MAP = {
+    str   : 'STRING',
+    int   : 'INT64',
+    float  : 'FLOAT64',
+    bool: 'BOOL',
+    bytes  : 'BYTES',
+    datetime.datetime: 'TIMESTAMP',
+    datetime.date: 'DATE',
+}
+
+
 def get_logger(name, fmt='%(asctime)-15s %(levelname)s %(message)s'):
     """
     Creates a Logger that logs to stdout
@@ -142,64 +153,36 @@ def gcs_export_job_poller(func):
                         job.job_id)
     return wrapper
 
-def set_scalar_parameter(key, value, typ):
-    """Set a named scalar query parameter
+def set_parameter(key, value):
+    """Set a named or positional query parameter.
 
     :param key str: key for the named parameter
-    :param value (int, float, str, byte, datetime.datetime):
-        value for the named parameter
-    :param typ str: type of the scalar parameter.
-    :return: bigquery.ScalarQueryParameter
+    :param value int, float, str, byte, datetime.datetime, bool, list, dict:
+        value for the query parameter
+    :return: concrete subclass of bigquery._AbstractQueryParameter
+    :raises: ValueError, when an invalid value is passed.
     """
-    return bigquery.ScalarQueryParameter(key, bq_scalar_type_map[typ], value)
+    if (isinstance(value, (str, int, float, bytes, bool, datetime.datetime, datetime.date))):
+        return bigquery.ScalarQueryParameter(
+            key, BQ_SCALAR_TYPE_MAP.get(type(value)), value)
+    elif isinstance(value, list):
+        if not value:
+            raise ValueError(
+                'Cannot infer type for empty array parameter provided.')
+        return bigquery.ArrayQueryParameter(
+            key, BQ_SCALAR_TYPE_MAP.get(type(value[0])), value)
+    elif isinstance(value, dict):
+        return set_struct_parameter(key, value)
 
-def set_list_parameter(key, value, typ):
-    """Set a named array query parameter
-
-    :param key str: key for the named parameter
-    :param value list(int, float, str, byte, datetime.datetime):
-        value for the named parameter
-    :param typ str: type of the array parameter.
-    :return: bigquery.ArrayQueryParameter
-    """
-    typ = type(value[0]).__name__
-    return bigquery.ArrayQueryParameter(key,
-                                        bq_scalar_type_map[typ],
-                                        value)
-
-def set_dict_parameter(key, value, typ):
-    """Set a named struct query parameter
+def set_struct_parameter(key, value):
+    """Set a named struct query parameter.
 
     :param key str: key for the named parameter
     :param value dict: value for the named parameter
-    :param typ str: type of the scalar parameter.
     :return: bigquery.ScalarQueryParameter
     """
-    res = []
-    for k in value:
-        typ = type(value[k]).__name__
-        res.append(set_parameter[typ](k, value[k], typ))
-    return bigquery.StructQueryParameter(key, *res)
-
-set_parameter = {
-    'str'        : set_scalar_parameter,
-    'int'        : set_scalar_parameter,
-    'float'      : set_scalar_parameter,
-    'bytes'      : set_scalar_parameter,
-    'datetime'   : set_scalar_parameter,
-    'list'       : set_list_parameter,
-    'dict'       : set_dict_parameter,
-}
-
-bq_scalar_type_map = {
-    'str'   : 'STRING',
-    'int'   : 'INT64',
-    'float'  : 'FLOAT64',
-    'boolean': 'BOOL',
-    'bytes'  : 'BYTES',
-    'datetime': 'TIMESTAMP',
-    'date': 'DATE',
-}
+    return bigquery.StructQueryParameter(
+        key, *[set_parameter(k,v) for k,v in value.items()])
 
 
 class BQPipeline():
@@ -307,7 +290,7 @@ class BQPipeline():
                                       exists_ok=exists_ok)
 
     def create_job_config(self, batch=False, dest=None, create=True,
-                          overwrite=True, append=False):
+                          overwrite=True, append=False, query_params=None):
         """
         Creates a QueryJobConfig
         :param batch: use QueryPriority.BATCH if true
@@ -350,11 +333,18 @@ class BQPipeline():
         else:
             data_set = None
 
-        return bigquery.QueryJobConfig(priority=priority,
-                                       default_dataset=data_set,
-                                       destination=dest_tableref,
-                                       create_disposition=create_disp,
-                                       write_disposition=write_disp)
+        job_config_settings = {
+            'priority': priority,
+            'default_dataset': data_set,
+            'destination': dest_tableref,
+            'create_disposition': create_disp,
+            'write_disposition': write_disp,
+        }
+        if query_params:
+            job_config_settings.update({'query_parameters':
+                                        self.set_query_params(query_params)})
+
+        return bigquery.QueryJobConfig(**job_config_settings)
 
     def validate_query_params(self, query_params, depth=0):
         """Validate the named/positional query parameters."""
@@ -374,13 +364,13 @@ class BQPipeline():
             # For dict, check recursively for valid parameters.
             # for others, check that they map to valid scalar types.
             if isinstance(value, list):
-                typ = set([type(val).__name__ for val in value])
-                res = not typ or (len(typ) == 1 and
-                                  typ.pop() in bq_scalar_type_map)
+                datatype = set(map(type, value))
+                res = (len(datatype) == 1 and
+                       datatype.issubset(BQ_SCALAR_TYPE_MAP))
             elif isinstance(value, dict):
                 res = self.validate_query_params(value, depth=1)
             else:
-                res = type(value).__name__ in bq_scalar_type_map
+                res = type(value) in BQ_SCALAR_TYPE_MAP
             if not res:
                 return res
         return True
@@ -388,34 +378,33 @@ class BQPipeline():
     def set_query_params(self, query_params):
         """Set the query parameters
 
-        :param query_params dict|list: Dict is provided for named parameters,
-                                       otherwise, a list.
+        :param query_params dict|list: Dict is provided for named parameters;
+                                       positional parameters as a list.
         :return: concrete subtype of bigquery._AbstractQueryParameter
         """
         if not query_params:
             return None
 
         if not self.validate_query_params(query_params):
-            self.logger.warning('Invalid query parameters provided!')
-            return None
+            raise ValueError('Invalid query parameters provided!')
 
         bq_query_params = []
         # Positional parameters will be passed as a list.
         # Named parameters will be a dict.
         for key in query_params:
+            # TODO(shubhanan): move out of the loop.
             if isinstance(query_params, list):
                 value = key
                 key = None
             else:
                 value = query_params[key]
-            typ = type(value).__name__
-            bq_query_params.append(set_parameter[typ](key, value, typ))
+            bq_query_params.append(set_parameter(key, value))
         return bq_query_params
 
     @exception_logger
     def run_query(self, path, batch=False, wait=True, create=True,
-                  overwrite=True, timeout=None, gcs_export_format='CSV',
-                  query_params=None, **kwargs):
+                  overwrite=True, append=False, timeout=None,
+                  gcs_export_format='CSV', query_params=None, **kwargs):
         """
         Executes a SQL query from a Jinja2 template file
         :param path: path to sql file or tuple of (path to sql file, destination tablespec)
@@ -440,10 +429,9 @@ class BQPipeline():
         template = self.jinja2.from_string(template_str)
         query = template.render(**kwargs)
         client = self.get_client()
-        job_config = self.create_job_config(batch, dest, create, overwrite)
-        query_parameters = self.set_query_params(query_params)
-        if query_parameters:
-            job_config.query_parameters = query_parameters
+        job_config = self.create_job_config(dest=dest, batch=batch,
+            create=create, overwrite=overwrite, append=append,
+            query_params=query_params)
 
         job = client.query(query,
                            job_config=job_config,

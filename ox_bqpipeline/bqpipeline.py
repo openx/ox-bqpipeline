@@ -42,6 +42,9 @@ BQ_SCALAR_TYPE_MAP = {
     datetime.date: 'DATE',
 }
 
+NUMERIC_BOUNDS = [-99999999999999999999999999999.999999999,
+                  99999999999999999999999999999.999999999]
+
 
 def get_logger(name, fmt='%(asctime)-15s %(levelname)s %(message)s'):
     """
@@ -162,15 +165,29 @@ def set_parameter(key, value):
     :return: concrete subclass of bigquery._AbstractQueryParameter
     :raises: ValueError, when an invalid value is passed.
     """
-    if (isinstance(value, (str, int, float, bytes, bool, datetime.datetime, datetime.date))):
+    if (isinstance(value, (str, int, bytes, bool, datetime.datetime,
+                           datetime.date))):
         return bigquery.ScalarQueryParameter(
             key, BQ_SCALAR_TYPE_MAP.get(type(value)), value)
+    elif isinstance(value, float):
+        if value < NUMERIC_BOUNDS[0] or value > NUMERIC_BOUNDS[1]:
+            return bigquery.ScalarQueryParameter(
+                key, BQ_SCALAR_TYPE_MAP.get(type(value)), value)
+        else:
+            return bigquery.ScalarQueryParameter(
+                key, 'NUMERIC', value)
+
     elif isinstance(value, list):
         if not value:
             raise ValueError(
-                'Cannot infer type for empty array parameter provided.')
-        return bigquery.ArrayQueryParameter(
-            key, BQ_SCALAR_TYPE_MAP.get(type(value[0])), value)
+                'Cannot infer type for empty array parameter.')
+        if not isinstance(value[0], float) or any([v < NUMERIC_BOUNDS[0] or
+                v > NUMERIC_BOUNDS[1] for v in value]):
+            return bigquery.ArrayQueryParameter(
+                key, BQ_SCALAR_TYPE_MAP.get(type(value[0])), value)
+        else:
+            return bigquery.ArrayQueryParameter(
+                key, 'NUMERIC', value)
     elif isinstance(value, dict):
         return set_struct_parameter(key, value)
 
@@ -346,34 +363,43 @@ class BQPipeline():
 
         return bigquery.QueryJobConfig(**job_config_settings)
 
-    def validate_query_params(self, query_params, depth=0):
+    def validate_query_params(self, query_params):
         """Validate the named/positional query parameters."""
-        if not (isinstance(query_params, list) or
-                isinstance(query_params, dict)):
+        if not isinstance(query_params, (list, dict)):
             return False
-        for key in query_params:
-            if isinstance(query_params, list):
-                value = key
-                key = None
-            else:
-                if not (depth or isinstance(key, str)):
-                    return False
-                value = query_params[key]
+        if isinstance(query_params, list):
+            res = all([self.validate_parameter(value) for value in
+                       query_params])
+        else:
+            datatype = set(map(type, query_params))
+            # Make sure all keys are str
+            res = len(datatype) == 1 and datatype.issubset([str])
+            res = res and all([self.validate_parameter(query_params[key])
+                               for key in query_params])
+        return res
 
+    def validate_parameter(self, query_parameter):
+        """Validate individual query parameter."""
+        res = True
+        if isinstance(query_parameter, list):
             # For list, make sure each element is a scalar type.
+            datatype = set(map(type, query_parameter))
+            res = (len(datatype) == 1 and
+                   datatype.issubset(BQ_SCALAR_TYPE_MAP))
+        elif isinstance(query_parameter, dict):
+            if not query_parameter:
+                return True
+            # For dict, make sure all keys are same type and
+            # one of BQ supported types.
+            datatype = set(map(type, query_parameter))
+            res = len(datatype) == 1 and datatype.issubset(BQ_SCALAR_TYPE_MAP)
             # For dict, check recursively for valid parameters.
+            res = res and all([self.validate_parameter(query_parameter[key])
+                               for key in query_parameter])
+        else:
             # for others, check that they map to valid scalar types.
-            if isinstance(value, list):
-                datatype = set(map(type, value))
-                res = (len(datatype) == 1 and
-                       datatype.issubset(BQ_SCALAR_TYPE_MAP))
-            elif isinstance(value, dict):
-                res = self.validate_query_params(value, depth=1)
-            else:
-                res = type(value) in BQ_SCALAR_TYPE_MAP
-            if not res:
-                return res
-        return True
+            res = type(query_parameter) in BQ_SCALAR_TYPE_MAP
+        return res
 
     def set_query_params(self, query_params):
         """Set the query parameters
@@ -388,18 +414,13 @@ class BQPipeline():
         if not self.validate_query_params(query_params):
             raise ValueError('Invalid query parameters provided!')
 
-        bq_query_params = []
-        # Positional parameters will be passed as a list.
-        # Named parameters will be a dict.
-        for key in query_params:
-            # TODO(shubhanan): move out of the loop.
-            if isinstance(query_params, list):
-                value = key
-                key = None
-            else:
-                value = query_params[key]
-            bq_query_params.append(set_parameter(key, value))
-        return bq_query_params
+        # Positional parameters are set with key=None
+        if isinstance(query_params, list):
+            return [set_parameter(None, value) for value in query_params]
+        else:
+            # Named parameters are set when query_params is a dict
+            return [set_parameter(key, query_params[key]) for key in
+                    query_params]
 
     @exception_logger
     def run_query(self, path, batch=False, wait=True, create=True,

@@ -27,7 +27,7 @@ def mock_gcs_export(cls, table, gcs_path, delimiter=',', header=True,
     pass
 
 
-class TestQueryParameters(unittest.TestCase):
+class TestJobConfig(unittest.TestCase):
 
     def test_table_spec_resolution(self):
         bqp = bqpipeline.BQPipeline(
@@ -86,24 +86,49 @@ class TestQueryParameters(unittest.TestCase):
         self.assertEqual(cfg.write_disposition,
                          bigquery.job.WriteDisposition.WRITE_EMPTY)
 
+class TestQueryParameters(unittest.TestCase):
+
     def test_scalar_parameters(self):
         result = bqpipeline.set_parameter('test', 'abc')
         self.assertEqual(result, bigquery.ScalarQueryParameter('test',
-                                                               'STRING', 'abc'))
+                                                               'STRING',
+                                                               'abc'))
 
         result = bqpipeline.set_parameter('test', 1)
         self.assertEqual(result, bigquery.ScalarQueryParameter('test',
                                                                'INT64', 1))
 
+        result = bqpipeline.set_parameter('test', 1.0009)
+        self.assertEqual(result, bigquery.ScalarQueryParameter('test',
+                                                               'NUMERIC',
+                                                               1.0009))
+
+        result = bqpipeline.set_parameter(
+            'test', 9999999999999999999999999999999.999999999)
+        self.assertEqual(result, bigquery.ScalarQueryParameter(
+            'test', 'FLOAT64', 9999999999999999999999999999999.999999999))
+
         dt = datetime.datetime.now()
         result = bqpipeline.set_parameter('test', dt)
         self.assertEqual(result, bigquery.ScalarQueryParameter('test',
-                                                               'TIMESTAMP', dt))
+                                                               'TIMESTAMP',
+                                                               dt))
+
+        dt = datetime.date.today()
+        result = bqpipeline.set_parameter('test', dt)
+        self.assertEqual(result, bigquery.ScalarQueryParameter('test',
+                                                               'DATE',
+                                                               dt))
 
         b = bytes(123)
         result = bqpipeline.set_parameter('test', b)
         self.assertEqual(result, bigquery.ScalarQueryParameter('test',
                                                                'BYTES', b))
+
+        b = True
+        result = bqpipeline.set_parameter('test', b)
+        self.assertEqual(result, bigquery.ScalarQueryParameter('test',
+                                                               'BOOL', b))
 
     def test_array_parameters(self):
         result = bqpipeline.set_parameter('test', ['abc'])
@@ -113,6 +138,16 @@ class TestQueryParameters(unittest.TestCase):
         result = bqpipeline.set_parameter('test', [1, 2])
         self.assertEqual(result, bigquery.ArrayQueryParameter('test', 'INT64',
                                                               [1, 2]))
+
+        val = [1.0, 9999999999999999999999999999999.999999999]
+        result = bqpipeline.set_parameter('test', val)
+        self.assertEqual(result, bigquery.ArrayQueryParameter(
+            'test',
+            'FLOAT64', val))
+
+        result = bqpipeline.set_parameter('test', [1.0, 2.01])
+        self.assertEqual(result, bigquery.ArrayQueryParameter('test', 'NUMERIC',
+                                                              [1.0, 2.01]))
 
         with self.assertRaises(ValueError):
             bqpipeline.set_parameter('test', [])
@@ -166,6 +201,10 @@ class TestQueryParameters(unittest.TestCase):
         self.assertFalse(bqp.validate_query_params({'1': []}))
 
         self.assertFalse(bqp.validate_query_params({1: 1}))
+
+        self.assertFalse(bqp.validate_query_params([1, [1, 'two']]))
+
+        self.assertFalse(bqp.validate_query_params({'1': {1: 'a', '2': 'b'}}))
 
     def test_valid_query_params(self):
         bqp = bqpipeline.BQPipeline(

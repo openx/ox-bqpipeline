@@ -189,17 +189,8 @@ def set_parameter(key, value):
             return bigquery.ArrayQueryParameter(
                 key, 'NUMERIC', value)
     elif isinstance(value, dict):
-        return set_struct_parameter(key, value)
-
-def set_struct_parameter(key, value):
-    """Set a named struct query parameter.
-
-    :param key str: key for the named parameter
-    :param value dict: value for the named parameter
-    :return: bigquery.ScalarQueryParameter
-    """
-    return bigquery.StructQueryParameter(
-        key, *[set_parameter(k,v) for k,v in value.items()])
+        return bigquery.StructQueryParameter(
+            key, *[set_parameter(k,v) for k,v in value.items()])
 
 
 class BQPipeline():

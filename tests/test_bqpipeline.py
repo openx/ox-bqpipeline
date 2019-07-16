@@ -213,16 +213,6 @@ class TestQueryParameters(unittest.TestCase):
         self.assertTrue(bqp.validate_query_params({'1': {}}))
         self.assertTrue(bqp.validate_query_params({'1': {1: 1}}))
 
-    def test_run_query(self):
-        bqp = bqpipeline.BQPipeline(
-            job_name='testjob', default_project='ox-data-analytics-devint',
-            default_dataset='scratch')
-        with mock.patch.object(bqpipeline.BQPipeline, 'export_csv_to_gcs',
-                               new=mock_gcs_export):
-            qj = bqp.run_query(('./tests/sql/select_query.sql', 'gs://mockpath'),
-                              batch=False, create=False, overwrite=False,
-                              query_params={'a': 1, 'b': 'one'}, dry_run=True)
-
 
 class TestLogging(unittest.TestCase):
     def test_name_in_log_suffix(self):

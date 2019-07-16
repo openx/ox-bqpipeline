@@ -22,11 +22,6 @@ from google.cloud import bigquery
 from ox_bqpipeline import bqpipeline
 
 
-def mock_gcs_export(cls, table, gcs_path, delimiter=',', header=True,
-                    wait=True, timeout=None):
-    pass
-
-
 class TestJobConfig(unittest.TestCase):
 
     def test_table_spec_resolution(self):

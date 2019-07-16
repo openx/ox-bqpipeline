@@ -465,7 +465,7 @@ class BQPipeline():
         return job
 
     def run_queries(self, query_paths, batch=True, wait=True, create=True,
-                    overwrite=True, timeout=20*60, **kwargs):
+                    overwrite=True, append=False, timeout=20*60, **kwargs):
         """
         :param query_paths: List[Union[str,Tuple[str,str]]] path to sql file or
                tuple of (path, destination tablespec)
@@ -478,7 +478,8 @@ class BQPipeline():
         """
         for path in query_paths:
             self.run_query(path, batch=batch, wait=wait, create=create,
-                           overwrite=overwrite, timeout=timeout, **kwargs)
+                           overwrite=overwrite, append=append, timeout=timeout,
+                           **kwargs)
 
     @exception_logger
     def copy_table(self, src, dest, wait=True, overwrite=True, timeout=None):

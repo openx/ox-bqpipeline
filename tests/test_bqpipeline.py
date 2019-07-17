@@ -199,14 +199,25 @@ class TestQueryParameters(unittest.TestCase):
 
         self.assertFalse(bqp.validate_query_params([1, [1, 'two']]))
 
-        self.assertFalse(bqp.validate_query_params({'1': {1: 'a', '2': 'b'}}))
+        self.assertFalse(bqp.validate_query_params({'1': {}}))
+
+        self.assertFalse(bqp.validate_query_params({'1': {1: 1}}))
+
+        self.assertFalse(bqp.validate_query_params({'1': [{1: 'a', '2': 'b'},
+                                                         {1: 'c', '2': 'b'}]}))
 
     def test_valid_query_params(self):
         bqp = bqpipeline.BQPipeline(
             job_name='testjob', default_project='testproject',
             default_dataset='testdataset')
-        self.assertTrue(bqp.validate_query_params({'1': {}}))
-        self.assertTrue(bqp.validate_query_params({'1': {1: 1}}))
+        self.assertTrue(bqp.validate_query_params({'1': {'1': 1}}))
+
+        self.assertTrue(bqp.validate_query_params({'1': {'1': 'a', '2': 2}}))
+
+        self.assertTrue(bqp.validate_query_params({'1': {'1': 'a',
+                                                         '2': {'b': 'c'},
+                                                         '3': [1, 2, 3]},
+                                                   '2': [1, 2, 3]}))
 
 
 class TestLogging(unittest.TestCase):

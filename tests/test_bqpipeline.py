@@ -22,6 +22,11 @@ from google.cloud import bigquery
 from ox_bqpipeline import bqpipeline
 
 
+def mock_gcs_export(cls, table, gcs_path, delimiter=',', header=True,
+                    wait=True, timeout=None):
+    pass
+
+
 class TestJobConfig(unittest.TestCase):
 
     def test_table_spec_resolution(self):
@@ -218,6 +223,45 @@ class TestQueryParameters(unittest.TestCase):
                                                          '2': {'b': 'c'},
                                                          '3': [1, 2, 3]},
                                                    '2': [1, 2, 3]}))
+
+    def test_run_query(self):
+        bqp = bqpipeline.BQPipeline(
+            job_name='testjob', default_project='ox-data-analytics-devint',
+            default_dataset='scratch')
+        with mock.patch.object(bqpipeline.BQPipeline, 'export_csv_to_gcs',
+                               new=mock_gcs_export):
+            qj = bqp.run_query(('./tests/sql/select_query1.sql',
+                                'gs://mockpath'),
+                               batch=False, overwrite=False,
+                               query_params={'a': 1, 'b': 'one'},
+                               dry_run=False)
+            result = [r.values() for r in qj.result()]
+            self.assertTrue(qj.done())
+            self.assertEqual(result[0], (1, 'one'))
+
+    def test_run_queries(self):
+        bqp = bqpipeline.BQPipeline(
+            job_name='testjob', default_project='ox-data-analytics-devint',
+            default_dataset='scratch')
+
+        with mock.patch.object(bqpipeline.BQPipeline, 'export_csv_to_gcs',
+                               new=mock_gcs_export):
+            qj_list = bqp.run_queries(
+                [('./tests/sql/select_query1.sql', 'gs://mockpath'),
+                 ('./tests/sql/select_query2.sql', 'gs://mockpath'),
+                 ('./tests/sql/select_query3.sql', 'gs://mockpath'),
+                ],
+                batch=False, overwrite=False,
+                query_params=[{'a': 1, 'b': 'one'},
+                              {'e': {'c': 'duos', 'd': 'don'}},
+                              None],
+                dry_run=False)
+            expected_list = [(1, 'one'),
+                             (2, 'two', {'c': 'duos', 'd': 'don'}),
+                             (1, 'one'),]
+            for i, expected in enumerate(expected_list):
+                result = [r.values() for r in qj_list[i].result()]
+                self.assertEqual(expected, result[0])
 
 
 class TestLogging(unittest.TestCase):

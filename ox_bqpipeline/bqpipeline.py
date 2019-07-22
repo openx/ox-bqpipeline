@@ -474,21 +474,27 @@ class BQPipeline():
         return job
 
     def run_queries(self, query_paths, batch=True, wait=True, create=True,
-                    overwrite=True, append=False, timeout=20*60, **kwargs):
+                    overwrite=True, append=False, timeout=20*60,
+                    query_params=None, **kwargs):
         """
         :param query_paths: List[Union[str,Tuple[str,str]]] path to sql file or
-               tuple of (path, destination tablespec)
+                tuple of (path, destination tablespec)
         :param batch: run query with batch priority
         :param wait: wait for job to complete before returning
         :param create: if False, destination table must already exist
         :param overwrite: if False, destination table must not exist
         :param timeout: time in seconds to wait for job to complete
+        :param query_params: list<dict> query parameters corresponding to each
+                query
         :param kwargs: replacements for Jinja2 template
+        :returns: list<bigquery.job.QueryJob>
         """
-        for path in query_paths:
-            self.run_query(path, batch=batch, wait=wait, create=create,
-                           overwrite=overwrite, append=append, timeout=timeout,
-                           **kwargs)
+        jobs = []
+        for i, path in enumerate(query_paths):
+            jobs.append(self.run_query(path, batch=batch, wait=wait, create=create,
+                                       overwrite=overwrite, append=append, timeout=timeout,
+                                       query_params=query_params[i], **kwargs))
+        return jobs
 
     @exception_logger
     def copy_table(self, src, dest, wait=True, overwrite=True, timeout=None):
@@ -602,6 +608,8 @@ class BQPipeline():
         job = self.get_client().extract_table(src, gcs_path, job_config=extract_job_config)
         self.logger.info('Extracting table `%s` to `%s` as AVRO  %s', table, gcs_path, job.job_id)
         return job
+
+
 def main():
     """
     Handles CLI invocations of bqpipelines.
@@ -628,7 +636,8 @@ def main():
     args = parser.parse_args()
 
     bqp = BQPipeline(job_name)
-    bqp.run_query((args.query_file, args.gcs_destination), gcs_format=args.gcs_format,
+    bqp.run_query((args.query_file, args.gcs_destination),
+                  gcs_export_format=args.gcs_format,
                   query_params=args.query_params)
 
 if __name__ == "__main__":

@@ -42,8 +42,8 @@ BQ_SCALAR_TYPE_MAP = {
     datetime.date: 'DATE',
 }
 
-NUMERIC_BOUNDS = [-99999999999999999999999999999.999999999,
-                  99999999999999999999999999999.999999999]
+NUMERIC_BOUNDS = {'min': -99999999999999999999999999999.999999999,
+                  'max': 99999999999999999999999999999.999999999}
 
 
 def get_logger(name, fmt='%(asctime)-15s %(levelname)s %(message)s'):
@@ -170,7 +170,7 @@ def set_parameter(key, value):
         return bigquery.ScalarQueryParameter(
             key, BQ_SCALAR_TYPE_MAP.get(type(value)), value)
     elif isinstance(value, float):
-        if value < NUMERIC_BOUNDS[0] or value > NUMERIC_BOUNDS[1]:
+        if value < NUMERIC_BOUNDS['min'] or value > NUMERIC_BOUNDS['max']:
             return bigquery.ScalarQueryParameter(
                 key, BQ_SCALAR_TYPE_MAP.get(type(value)), value)
         else:
@@ -181,8 +181,8 @@ def set_parameter(key, value):
         if not value:
             raise ValueError(
                 'Cannot infer type for empty array parameter.')
-        if not isinstance(value[0], float) or any([v < NUMERIC_BOUNDS[0] or
-                v > NUMERIC_BOUNDS[1] for v in value]):
+        if not isinstance(value[0], float) or any([v < NUMERIC_BOUNDS['min'] or
+                v > NUMERIC_BOUNDS['max'] for v in value]):
             return bigquery.ArrayQueryParameter(
                 key, BQ_SCALAR_TYPE_MAP.get(type(value[0])), value)
         else:

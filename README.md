@@ -72,13 +72,10 @@ module, use the following pattern.
             job_name='testjob', default_project='project_name',
             default_dataset='dataset_name')
         qj_list = bqp.run_queries(
-            [(<query1_path>, <table_or_gcs_dest>),
-             (<query2_path>, <table_or_gcs_dest>),
+            [(<query1_path>, <table_or_gcs_dest>, {'query1_params key,val'}),
+             (<query2_path>, <table_or_gcs_dest>, {'query2_params key,val'}),
             ],
             batch=False, overwrite=False,
-            # provide query parameters dict for each query.
-            query_params = [{'a': 1, 'b': 'one'},              # query1 params
-                            {'e': {'c': 'duos', 'd': 'don'}}], # query2 params
             dry_run=False)
 ```
 

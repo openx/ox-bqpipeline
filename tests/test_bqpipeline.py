@@ -231,9 +231,8 @@ class TestQueryParameters(unittest.TestCase):
         with mock.patch.object(bqpipeline.BQPipeline, 'export_csv_to_gcs',
                                new=mock_gcs_export):
             qj = bqp.run_query(('./tests/sql/select_query1.sql',
-                                'gs://mockpath'),
+                                'gs://mockpath', {'a': 1, 'b': 'one'}),
                                batch=False, overwrite=False,
-                               query_params={'a': 1, 'b': 'one'},
                                dry_run=False)
             result = [r.values() for r in qj.result()]
             self.assertTrue(qj.done())
@@ -247,14 +246,13 @@ class TestQueryParameters(unittest.TestCase):
         with mock.patch.object(bqpipeline.BQPipeline, 'export_csv_to_gcs',
                                new=mock_gcs_export):
             qj_list = bqp.run_queries(
-                [('./tests/sql/select_query1.sql', 'gs://mockpath'),
-                 ('./tests/sql/select_query2.sql', 'gs://mockpath'),
+                [('./tests/sql/select_query1.sql', 'gs://mockpath',
+                  {'a': 1, 'b': 'one'}),
+                 ('./tests/sql/select_query2.sql', 'gs://mockpath',
+                  {'e': {'c': 'duos', 'd': 'don'}}),
                  ('./tests/sql/select_query3.sql', 'gs://mockpath'),
                 ],
                 batch=False, overwrite=False,
-                query_params=[{'a': 1, 'b': 'one'},
-                              {'e': {'c': 'duos', 'd': 'don'}},
-                              None],
                 dry_run=False)
             expected_list = [(1, 'one'),
                              (2, 'two', {'c': 'duos', 'd': 'don'}),

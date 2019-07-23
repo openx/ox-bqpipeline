@@ -422,10 +422,32 @@ class BQPipeline():
             return [set_parameter(key, query_params[key]) for key in
                     query_params]
 
+    def get_query_details(self, query_details):
+        """Returns the query path, destination, parameters and GCS flag.
+
+        :param query_details <tuple|str>:
+        :returns: Query path, destination GCS path or table spec, query params,
+                and boolean to signify if the destination is GCS.
+        """
+        sql_path, destination, query_params = None, None, None
+        is_gcs_dest = False
+        if type(query_details) == tuple:
+            sql_path = query_details[0]
+            destination = query_details[1]
+            if len(query_details) > 1:
+                is_gcs_dest = query_details[1].startswith('gs://')
+                if not is_gcs_dest:
+                    destination = self.resolve_table_spec(query_details[1])
+            if len(query_details) == 3:
+                query_params = query_details[2]
+        else:
+            sql_path = query_details
+        return sql_path, destination, query_params, is_gcs_dest
+
     @exception_logger
-    def run_query(self, path, batch=False, wait=True, create=True,
+    def run_query(self, query_details, batch=False, wait=True, create=True,
                   overwrite=True, append=False, timeout=None,
-                  gcs_export_format='CSV', query_params=None, **kwargs):
+                  gcs_export_format='CSV', **kwargs):
         """
         Executes a SQL query from a Jinja2 template file
         :param path: path to sql file or tuple of (path to sql file, destination tablespec)
@@ -438,19 +460,14 @@ class BQPipeline():
         :param kwargs: replacements for Jinja2 template
         :return: bigquery.job.QueryJob
         """
-        dest = None
-        sql_path = path
-        if type(path) == tuple:
-            is_gcs_dest = path[1].startswith('gs://')
-            sql_path = path[0]
-            if not is_gcs_dest:
-                dest = self.resolve_table_spec(path[1])
+        sql_path, destination, query_params, is_gcs_dest = self.get_query_details(
+            query_details)
 
         template_str = read_sql(sql_path)
         template = self.jinja2.from_string(template_str)
         query = template.render(**kwargs)
         client = self.get_client()
-        job_config = self.create_job_config(dest=dest, batch=batch,
+        job_config = self.create_job_config(dest=destination, batch=batch,
             create=create, overwrite=overwrite, append=append,
             query_params=query_params)
 
@@ -465,17 +482,18 @@ class BQPipeline():
 
         if is_gcs_dest:
             if gcs_export_format == 'CSV':
-                self.export_csv_to_gcs(job.destination, path[1], delimiter=',', header=True)
+                self.export_csv_to_gcs(job.destination, destination,
+                    delimiter=',', header=True)
             elif gcs_export_format == 'JSON':
-                self.export_json_to_gcs(job.destination, path[1])
+                self.export_json_to_gcs(job.destination, destination)
             elif gcs_export_format == 'AVRO':
-                self.export_avro_to_gcs(job.destination, path[1])
+                self.export_avro_to_gcs(job.destination, destination)
 
         return job
 
     def run_queries(self, query_paths, batch=True, wait=True, create=True,
                     overwrite=True, append=False, timeout=20*60,
-                    query_params=None, **kwargs):
+                    **kwargs):
         """
         :param query_paths: List[Union[str,Tuple[str,str]]] path to sql file or
                 tuple of (path, destination tablespec)
@@ -484,16 +502,15 @@ class BQPipeline():
         :param create: if False, destination table must already exist
         :param overwrite: if False, destination table must not exist
         :param timeout: time in seconds to wait for job to complete
-        :param query_params: list<dict> query parameters corresponding to each
-                query
         :param kwargs: replacements for Jinja2 template
         :returns: list<bigquery.job.QueryJob>
         """
         jobs = []
-        for i, path in enumerate(query_paths):
-            jobs.append(self.run_query(path, batch=batch, wait=wait, create=create,
-                                       overwrite=overwrite, append=append, timeout=timeout,
-                                       query_params=query_params[i], **kwargs))
+        for path in query_paths:
+            jobs.append(self.run_query(path, batch=batch, wait=wait,
+                                       create=create, overwrite=overwrite,
+                                       append=append, timeout=timeout,
+                                       **kwargs))
         return jobs
 
     @exception_logger
@@ -636,9 +653,8 @@ def main():
     args = parser.parse_args()
 
     bqp = BQPipeline(job_name)
-    bqp.run_query((args.query_file, args.gcs_destination),
-                  gcs_export_format=args.gcs_format,
-                  query_params=args.query_params)
+    bqp.run_query((args.query_file, args.gcs_destination, args.query_params),
+                  gcs_export_format=args.gcs_format)
 
 if __name__ == "__main__":
     main()

@@ -431,13 +431,12 @@ class BQPipeline():
         """
         sql_path, destination, query_params = None, None, None
         is_gcs_dest = False
-        if type(query_details) == tuple:
+        if isinstance(query_details, tuple) and len(query_details) > 1:
             sql_path = query_details[0]
             destination = query_details[1]
-            if len(query_details) > 1:
-                is_gcs_dest = query_details[1].startswith('gs://')
-                if not is_gcs_dest:
-                    destination = self.resolve_table_spec(query_details[1])
+            is_gcs_dest = query_details[1].startswith('gs://')
+            if not is_gcs_dest:
+                destination = self.resolve_table_spec(query_details[1])
             if len(query_details) == 3:
                 query_params = query_details[2]
         else:

@@ -22,6 +22,10 @@ from google.cloud import bigquery
 from ox_bqpipeline import bqpipeline
 
 
+TEST_PROJECT = 'ox-data-analytics-devint'
+TEST_DATASET = 'scratch'
+
+
 def mock_gcs_export(cls, table, gcs_path, delimiter=',', header=True,
                     wait=True, timeout=None):
     pass
@@ -224,10 +228,23 @@ class TestQueryParameters(unittest.TestCase):
                                                          '3': [1, 2, 3]},
                                                    '2': [1, 2, 3]}))
 
+    def test_get_query_details(self):
+        bqp = bqpipeline.BQPipeline(
+            job_name='testjob', default_project=TEST_PROJECT,
+            default_dataset=TEST_DATASET)
+        inputs = ('/path/to/query.sql', 'gs://gcs_bucket/object',
+                  {'query_param1': 'value', 'query_param2': 2})
+        expected = ('/path/to/query.sql', 'gs://gcs_bucket/object',
+                  {'query_param1': 'value', 'query_param2': 2}, True)
+        self.assertEqual(expected, bqp.get_query_details(inputs))
+
+        self.assertEqual(('/query/path', None, None, False),
+                         bqp.get_query_details('/query/path'))
+
     def test_run_query(self):
         bqp = bqpipeline.BQPipeline(
-            job_name='testjob', default_project='ox-data-analytics-devint',
-            default_dataset='scratch')
+            job_name='testjob', default_project=TEST_PROJECT,
+            default_dataset=TEST_DATASET)
         with mock.patch.object(bqpipeline.BQPipeline, 'export_csv_to_gcs',
                                new=mock_gcs_export):
             qj = bqp.run_query(('./tests/sql/select_query1.sql',
@@ -240,8 +257,8 @@ class TestQueryParameters(unittest.TestCase):
 
     def test_run_queries(self):
         bqp = bqpipeline.BQPipeline(
-            job_name='testjob', default_project='ox-data-analytics-devint',
-            default_dataset='scratch')
+            job_name='testjob', default_project=TEST_PROJECT,
+            default_dataset=TEST_DATASET)
 
         with mock.patch.object(bqpipeline.BQPipeline, 'export_csv_to_gcs',
                                new=mock_gcs_export):

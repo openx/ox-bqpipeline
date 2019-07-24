@@ -66,6 +66,18 @@ gcs_export_job_poller(func)
 
 A decorator to wait on export job
 
+## set_parameter
+```python
+set_parameter(key, value)
+```
+Set a named or positional query parameter.
+
+:param key str: key for the named parameter
+:param value int, float, str, byte, datetime.datetime, bool, list, dict:
+    value for the query parameter
+:return: concrete subclass of bigquery._AbstractQueryParameter
+:raises: ValueError, when an invalid value is passed.
+
 ## BQPipeline
 ```python
 BQPipeline(self, job_name, query_project=None, location='US', default_project=None, default_dataset=None, json_credentials_path=None)
@@ -121,7 +133,7 @@ Creates a BigQuery Dataset from a full or partial dataset spec.
 
 ### create_job_config
 ```python
-BQPipeline.create_job_config(self, batch=False, dest=None, create=True, overwrite=True, append=False)
+BQPipeline.create_job_config(self, batch=False, dest=None, create=True, overwrite=True, append=False, query_params=None)
 ```
 
 Creates a QueryJobConfig
@@ -133,9 +145,49 @@ Creates a QueryJobConfig
 :param append: if True, destination table will be appended to
 :return: bigquery.QueryJobConfig
 
+### validate_query_params
+```python
+BQPipeline.validate_query_params(self, query_params)
+```
+Validate the named/positional query parameters.
+
+:param query_params dict|list: Dict is provided for named parameters;
+                               positional parameters as a list.
+:return: True if the query parameters are valid.
+
+### validate_parameter
+```python
+BQPipeline.validate_parameter(self, query_parameter)
+```
+Validate individual query parameter.
+
+:param query_parameter dict|list|int|float|bool|byte|date|timestamp:
+:return: True if the query parameters are valid.
+
+### set_query_params
+```python
+BQPipeline.set_query_params(self, query_params)
+```
+Set the query parameters
+
+:param query_params dict|list: Dict is provided for named parameters;
+                               positional parameters as a list.
+:return: concrete subtype of bigquery._AbstractQueryParameter
+:raises: ValueError when invalid paramters are passed.
+
+### get_query_details
+```python
+BQPipeline.get_query_details(self, query_details)
+```
+Returns the query path, destination, parameters and GCS flag.
+
+:param query_details <tuple|str>:
+:returns: Query path, destination GCS path or table spec, query params,
+        and boolean to signify if the destination is GCS.
+
 ### run_query
 ```python
-BQPipeline.run_query(self, path, batch=False, wait=True, create=True, overwrite=True, timeout=None, gcs_export_format='CSV', **kwargs)
+BQPipeline.run_query(self, query_details, batch=False, wait=True, create=True, overwrite=True, append=False, timeout=None, gcs_export_format='CSV', **kwargs)
 ```
 
 Executes a SQL query from a Jinja2 template file
@@ -151,17 +203,18 @@ Executes a SQL query from a Jinja2 template file
 
 ### run_queries
 ```python
-BQPipeline.run_queries(self, query_paths, batch=True, wait=True, create=True, overwrite=True, timeout=1200, **kwargs)
+BQPipeline.run_queries(self, query_paths, batch=True, wait=True, create=True, overwrite=True, append=False, timeout=1200, **kwargs)
 ```
 
 :param query_paths: List[Union[str,Tuple[str,str]]] path to sql file or
-       tuple of (path, destination tablespec)
+        tuple of (path, destination tablespec)
 :param batch: run query with batch priority
 :param wait: wait for job to complete before returning
 :param create: if False, destination table must already exist
 :param overwrite: if False, destination table must not exist
 :param timeout: time in seconds to wait for job to complete
 :param kwargs: replacements for Jinja2 template
+:returns: list<bigquery.job.QueryJob>
 
 ### copy_table
 ```python

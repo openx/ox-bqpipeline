@@ -175,9 +175,19 @@ Set the query parameters
 :return: concrete subtype of bigquery._AbstractQueryParameter
 :raises: ValueError when invalid paramters are passed.
 
+### get_query_details
+```python
+BQPipeline.get_query_details(self, query_details)
+```
+Returns the query path, destination, parameters and GCS flag.
+
+:param query_details <tuple|str>:
+:returns: Query path, destination GCS path or table spec, query params,
+        and boolean to signify if the destination is GCS.
+
 ### run_query
 ```python
-BQPipeline.run_query(self, path, batch=False, wait=True, create=True, overwrite=True, append=False, timeout=None, gcs_export_format='CSV', query_params=None, **kwargs)
+BQPipeline.run_query(self, query_details, batch=False, wait=True, create=True, overwrite=True, append=False, timeout=None, gcs_export_format='CSV', **kwargs)
 ```
 
 Executes a SQL query from a Jinja2 template file
@@ -193,7 +203,7 @@ Executes a SQL query from a Jinja2 template file
 
 ### run_queries
 ```python
-BQPipeline.run_queries(self, query_paths, batch=True, wait=True, create=True, overwrite=True, append=False, timeout=1200, query_params=None, **kwargs)
+BQPipeline.run_queries(self, query_paths, batch=True, wait=True, create=True, overwrite=True, append=False, timeout=1200, **kwargs)
 ```
 
 :param query_paths: List[Union[str,Tuple[str,str]]] path to sql file or
@@ -203,8 +213,6 @@ BQPipeline.run_queries(self, query_paths, batch=True, wait=True, create=True, ov
 :param create: if False, destination table must already exist
 :param overwrite: if False, destination table must not exist
 :param timeout: time in seconds to wait for job to complete
-:param query_params: list<dict> query parameters corresponding to each
-        query
 :param kwargs: replacements for Jinja2 template
 :returns: list<bigquery.job.QueryJob>
 
